@@ -35,7 +35,7 @@ function NavButton({ to, label, icon }: { to: string; label: string; icon?: Reac
       to={to}
       className={({ isActive }) =>
         cn(
-          'group flex h-11 items-center justify-center gap-2 rounded-full border text-xs tracking-[0.16em] uppercase transition',
+          'group flex h-12 flex-col items-center justify-center gap-0.5 rounded-full border text-[10px] tracking-[0.14em] uppercase transition',
           isActive
             ? 'border-champagne bg-champagne/15 text-champagne'
             : 'border-white/15 bg-white/5 text-white/75 hover:border-champagne/50 hover:text-champagne',
@@ -43,7 +43,7 @@ function NavButton({ to, label, icon }: { to: string; label: string; icon?: Reac
       }
     >
       {icon}
-      <span>{label}</span>
+      <span className="leading-none">{label}</span>
     </NavLink>
   );
 }
@@ -66,7 +66,7 @@ function ShutterButton({ isAqquire, onPress }: { isAqquire: boolean; onPress: ()
 
 function FeedIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
       <path d="M3.9 7.9C5.7 11.8 8.5 14 12 14s6.3-2.2 8.1-6.1" />
       <path d="M5.9 8.9 6.65 9.65 5.9 10.4l-.75-.75.75-.75Z" fill="currentColor" stroke="none" />
       <path d="M8.35 11.25 9.1 12 8.35 12.75 7.6 12l.75-.75Z" fill="currentColor" stroke="none" />
@@ -83,7 +83,7 @@ function FeedIcon() {
 
 function VaultIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
       <rect x="3.6" y="4.2" width="16.8" height="15.6" rx="2.3" />
       <circle cx="12" cy="12" r="4.25" />
       <circle cx="12" cy="12" r="1.15" fill="currentColor" stroke="none" />
