@@ -66,16 +66,17 @@ function ShutterButton({ isAqquire, onPress }: { isAqquire: boolean; onPress: ()
 
 function FeedIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-      <path d="M4.2 8.8a7.8 7.8 0 0 0 15.6 0" />
-      <circle cx="6" cy="9.2" r="0.95" fill="currentColor" stroke="none" />
-      <circle cx="8.3" cy="11.4" r="0.95" fill="currentColor" stroke="none" />
-      <circle cx="10.8" cy="12.7" r="0.95" fill="currentColor" stroke="none" />
-      <circle cx="13.2" cy="12.7" r="0.95" fill="currentColor" stroke="none" />
-      <circle cx="15.7" cy="11.4" r="0.95" fill="currentColor" stroke="none" />
-      <circle cx="18" cy="9.2" r="0.95" fill="currentColor" stroke="none" />
-      <path d="M12 13.7v2.3" />
-      <path d="M10.7 17.1 12 19.6l1.3-2.5-1.3-1.2-1.3 1.2Z" />
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+      <path d="M3.9 7.9C5.7 11.8 8.5 14 12 14s6.3-2.2 8.1-6.1" />
+      <path d="M5.9 8.9 6.65 9.65 5.9 10.4l-.75-.75.75-.75Z" fill="currentColor" stroke="none" />
+      <path d="M8.35 11.25 9.1 12 8.35 12.75 7.6 12l.75-.75Z" fill="currentColor" stroke="none" />
+      <path d="M10.75 12.7 11.5 13.45 10.75 14.2 10 13.45l.75-.75Z" fill="currentColor" stroke="none" />
+      <path d="M13.25 12.7 14 13.45 13.25 14.2 12.5 13.45l.75-.75Z" fill="currentColor" stroke="none" />
+      <path d="M15.65 11.25 16.4 12 15.65 12.75 14.9 12l.75-.75Z" fill="currentColor" stroke="none" />
+      <path d="M18.1 8.9 18.85 9.65 18.1 10.4l-.75-.75.75-.75Z" fill="currentColor" stroke="none" />
+      <path d="M12 14.2v1.8" />
+      <path d="M12 16.1 13.5 17.7 12 19.3 10.5 17.7 12 16.1Z" fill="currentColor" stroke="none" />
+      <path d="M11.1 17.7h1.8" />
     </svg>
   );
 }
