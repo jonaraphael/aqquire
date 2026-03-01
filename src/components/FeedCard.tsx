@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { currency, cn } from '@/lib/utils';
 
 export interface FeedCardItem {
@@ -23,11 +23,18 @@ export interface FeedCardItem {
 interface FeedCardProps {
   item: FeedCardItem;
   debugMode: boolean;
-  onCommit: (itemId: string, interaction: 'swipe' | 'longPress') => Promise<void>;
+  onCommit: (itemId: string, interaction: 'swipe') => Promise<void>;
 }
 
-const LONG_PRESS_MS = 650;
-const SWIPE_THRESHOLD = 0.4;
+const SWIPE_THRESHOLD = 0.3;
+const SPARKLES = [
+  { left: '8%', top: '20%', delay: '0s', duration: '2.1s' },
+  { left: '25%', top: '62%', delay: '0.35s', duration: '2.6s' },
+  { left: '44%', top: '30%', delay: '0.7s', duration: '1.95s' },
+  { left: '66%', top: '68%', delay: '0.2s', duration: '2.4s' },
+  { left: '82%', top: '24%', delay: '0.9s', duration: '2.15s' },
+  { left: '92%', top: '58%', delay: '0.45s', duration: '2.35s' },
+] as const;
 
 function vibrate() {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
@@ -35,128 +42,120 @@ function vibrate() {
   }
 }
 
-function fillStep(progress: number) {
-  return Math.max(0, Math.min(10, Math.round(progress * 10)));
-}
-
 export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
   const rowRef = useRef<HTMLDivElement | null>(null);
-  const longPressTimer = useRef<number | null>(null);
-  const longPressInterval = useRef<number | null>(null);
   const committedRef = useRef(false);
 
   const [progress, setProgress] = useState(0);
-  const [flashGold, setFlashGold] = useState(false);
+  const [hasCommitted, setHasCommitted] = useState(false);
   const [pendingIndicator, setPendingIndicator] = useState(false);
 
-  const step = useMemo(() => fillStep(progress), [progress]);
+  const fillRatio = hasCommitted ? 1 : progress;
 
-  const cleanupHold = () => {
-    if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
-    if (longPressInterval.current) window.clearInterval(longPressInterval.current);
-    longPressTimer.current = null;
-    longPressInterval.current = null;
-  };
-
-  const fireCommit = async (interaction: 'swipe' | 'longPress') => {
+  const fireCommit = async () => {
     if (committedRef.current) return;
     committedRef.current = true;
 
-    setProgress(1);
-    setFlashGold(true);
+    setHasCommitted(true);
     setPendingIndicator(true);
+    setProgress(1);
     vibrate();
 
-    window.setTimeout(() => setFlashGold(false), 180);
-    window.setTimeout(() => {
-      setPendingIndicator(false);
-      committedRef.current = false;
-      setProgress(0);
-    }, 1200);
-
-    await onCommit(item._id, interaction);
+    await onCommit(item._id, 'swipe');
   };
 
   return (
     <motion.article
       ref={rowRef}
-      drag="x"
+      drag={hasCommitted ? false : 'x'}
       dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.06}
-      className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur-sm"
+      dragElastic={0.14}
+      dragMomentum={false}
+      className={cn(
+        'relative overflow-hidden rounded-2xl border p-3 backdrop-blur-sm transition-colors duration-500',
+        hasCommitted
+          ? 'border-champagne/60 bg-gradient-to-br from-[#f6d9921f] to-[#b482371e] shadow-[0_12px_34px_rgba(226,175,84,0.25)]'
+          : 'border-white/10 bg-white/[0.04]',
+      )}
       onDrag={(_event, info) => {
+        if (hasCommitted) return;
         const width = rowRef.current?.clientWidth ?? 1;
         const dragRatio = Math.min(1, Math.abs(info.offset.x) / width);
         setProgress(dragRatio);
       }}
       onDragEnd={(_event, info) => {
+        if (hasCommitted) return;
         const width = rowRef.current?.clientWidth ?? 1;
         const dragRatio = Math.min(1, Math.abs(info.offset.x) / width);
-        setProgress(0);
         if (dragRatio >= SWIPE_THRESHOLD) {
-          void fireCommit('swipe');
+          void fireCommit();
+        } else {
+          setProgress(0);
         }
       }}
-      onPointerDown={() => {
-        cleanupHold();
-        const startedAt = Date.now();
-        longPressInterval.current = window.setInterval(() => {
-          const elapsed = Date.now() - startedAt;
-          setProgress(Math.min(1, elapsed / LONG_PRESS_MS));
-        }, 33);
-
-        longPressTimer.current = window.setTimeout(() => {
-          void fireCommit('longPress');
-          cleanupHold();
-        }, LONG_PRESS_MS);
-      }}
-      onPointerUp={() => {
-        cleanupHold();
-        if (!flashGold) setProgress(0);
-      }}
-      onPointerCancel={() => {
-        cleanupHold();
-        if (!flashGold) setProgress(0);
-      }}
     >
-      <div className="pointer-events-none absolute inset-0 flex">
-        {Array.from({ length: 10 }).map((_, index) => (
-          <span
-            key={index}
-            className={cn(
-              'h-full flex-1 transition-colors duration-100',
-              index < step || flashGold ? 'bg-gradient-to-b from-[#ffe9b6]/45 to-[#b4883a]/45' : 'bg-transparent',
-            )}
-          />
-        ))}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-[#f7deac26] via-[#f0cb8652] to-[#b5833955] transition-[width] duration-120 ease-out"
+          style={{ width: `${fillRatio * 100}%` }}
+        />
       </div>
+
+      {hasCommitted ? <div className="pointer-events-none absolute inset-0 feed-card-shimmer" /> : null}
+
+      {hasCommitted ? (
+        <div className="pointer-events-none absolute inset-0">
+          {SPARKLES.map((sparkle, index) => (
+            <span
+              key={index}
+              className="feed-card-sparkle"
+              style={{
+                left: sparkle.left,
+                top: sparkle.top,
+                animationDelay: sparkle.delay,
+                animationDuration: sparkle.duration,
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
 
       <div className="relative z-10 flex items-center gap-3">
         <img
           src={item.heroImageUrl}
           alt={item.displayName}
-          className="h-20 w-20 rounded-xl object-cover ring-1 ring-white/15"
+          className={cn(
+            'h-20 w-20 rounded-xl object-cover ring-1 transition duration-400',
+            hasCommitted ? 'ring-champagne/55 saturate-110' : 'ring-white/15',
+          )}
           loading="lazy"
         />
 
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="truncate font-display text-lg text-pearl">{item.displayName}</p>
-          <p className="text-sm tracking-wide text-pearl/85">{currency(item.price, item.currency)}</p>
-          <div className="flex items-center gap-2 text-xs text-pearl/65">
+          <p className={cn('truncate font-display text-lg', hasCommitted ? 'text-[#f8e7c2]' : 'text-pearl')}>{item.displayName}</p>
+          <p className={cn('text-sm tracking-wide', hasCommitted ? 'text-champagne/95' : 'text-pearl/85')}>
+            {currency(item.price, item.currency)}
+          </p>
+          <div className={cn('flex items-center gap-2 text-xs', hasCommitted ? 'text-pearl/85' : 'text-pearl/65')}>
             <img
               src={item.whoAvatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=60'}
               alt={item.whoHandle}
               className="h-5 w-5 rounded-full object-cover"
             />
             <span>{item.whoHandle}</span>
-            <span className="rounded-full border border-champagne/45 px-2 py-0.5 tracking-[0.16em] text-champagne">
+            <span
+              className={cn(
+                'rounded-full border px-2 py-0.5 tracking-[0.16em] transition-colors',
+                hasCommitted ? 'border-champagne/65 bg-champagne/20 text-champagne' : 'border-champagne/45 text-champagne',
+              )}
+            >
               AQQUIRE
             </span>
             {item.associatedCount > 1 ? <span>+{item.associatedCount - 1}</span> : null}
           </div>
 
           {debugMode && item.debug ? (
-            <p className="text-[11px] text-pearl/55">
+            <p className={cn('text-[11px]', hasCommitted ? 'text-pearl/75' : 'text-pearl/55')}>
               {item.debug.supplierName ?? 'Source hidden'}
               {item.debug.uniqueFlag ? ' • Unique' : ''}
             </p>
@@ -165,7 +164,7 @@ export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
       </div>
 
       {pendingIndicator ? (
-        <span className="absolute right-3 top-3 rounded-full border border-champagne/50 bg-champagne/20 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-champagne">
+        <span className="absolute right-3 top-3 rounded-full border border-champagne/60 bg-gradient-to-r from-[#f1d18f33] to-[#b7843f44] px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-champagne shadow-[0_0_16px_rgba(224,178,93,0.35)]">
           pending
         </span>
       ) : null}

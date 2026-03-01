@@ -46,3 +46,66 @@ body {
 .qr-grid {
   grid-template-columns: repeat(29, minmax(0, 1fr));
 }
+
+@keyframes feed-shimmer {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+
+  40% {
+    opacity: 0.22;
+  }
+
+  100% {
+    transform: translateX(130%);
+    opacity: 0;
+  }
+}
+
+@keyframes feed-sparkle {
+  0% {
+    transform: scale(0.4) rotate(0deg);
+    opacity: 0;
+  }
+
+  30% {
+    transform: scale(1) rotate(18deg);
+    opacity: 1;
+  }
+
+  70% {
+    transform: scale(0.8) rotate(-8deg);
+    opacity: 0.7;
+  }
+
+  100% {
+    transform: scale(0.35) rotate(0deg);
+    opacity: 0;
+  }
+}
+
+.feed-card-shimmer::before {
+  content: '';
+  position: absolute;
+  inset: -30% -15%;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 234, 185, 0.12) 46%,
+    rgba(255, 244, 217, 0.28) 52%,
+    rgba(255, 229, 162, 0.12) 58%,
+    transparent 72%
+  );
+  animation: feed-shimmer 2.6s ease-in-out infinite;
+}
+
+.feed-card-sparkle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 246, 212, 0.95) 0%, rgba(255, 208, 119, 0.72) 45%, transparent 72%);
+  filter: drop-shadow(0 0 7px rgba(245, 208, 130, 0.75));
+  animation: feed-sparkle 2.2s ease-in-out infinite;
+}

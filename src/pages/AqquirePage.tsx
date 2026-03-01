@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { currency } from '@/lib/utils';
-import { useDebugMode } from '@/hooks/useDebugMode';
+import { useNavigate } from 'react-router-dom';
 import { useAnalyzeCapture, useAqquireIt, useViewerContext } from '@/lib/localBackend';
+import { useDebugMode } from '@/hooks/useDebugMode';
 
 interface CaptureResult {
   displayName: string;
@@ -54,158 +54,198 @@ function fileToDataUrl(file: File) {
 }
 
 export function AqquirePage() {
+  const navigate = useNavigate();
   const viewerContext = useViewerContext();
   const debugMode = useDebugMode(viewerContext?.user.debugEnabled);
 
   const analyzeCapture = useAnalyzeCapture();
   const aqquireIt = useAqquireIt();
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const captureLockRef = useRef(false);
+  const uploadRef = useRef<HTMLInputElement | null>(null);
 
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [result, setResult] = useState<CaptureResult | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const triggerCapture = () => fileInputRef.current?.click();
+  useEffect(() => {
+    let active = true;
 
-  const showToast = (message: string) => {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 1500);
+    const start = async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setErrorMessage('Camera unavailable. Upload an image instead.');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        });
+
+        if (!active) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+
+        setCameraReady(true);
+        setErrorMessage(null);
+      } catch {
+        setErrorMessage('Camera permission denied. Upload an image instead.');
+      }
+    };
+
+    void start();
+
+    return () => {
+      active = false;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    };
+  }, []);
+
+  const commitCapturedImage = async (imageDataUrl: string) => {
+    if (captureLockRef.current) return;
+
+    captureLockRef.current = true;
+    setIsCapturing(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await analyzeCapture({ imageDataUrl });
+      if (!response.ok || !response.result) {
+        throw new Error('Capture analysis failed');
+      }
+
+      const result = response.result as CaptureResult;
+
+      await aqquireIt({
+        displayName: result.displayName,
+        heroImageUrl: result.heroImageUrl,
+        capturedImageUrl: result.capturedImageUrl,
+        category: result.category,
+        priceEstimate: result.priceEstimate,
+        currency: result.currency,
+        supplierName: result.supplierName,
+        supplierUrl: result.supplierUrl,
+        uniqueFlag: result.uniqueFlag,
+        confidence: result.confidence,
+        debugPriceBreakdown: result.debugPriceBreakdown,
+      });
+
+      void navigate('/vault');
+    } catch {
+      setErrorMessage('Capture failed. Try again.');
+    } finally {
+      setIsCapturing(false);
+      captureLockRef.current = false;
+    }
   };
 
-  const onFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+  const snapLiveFrame = async () => {
+    if (!videoRef.current || videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
+      setErrorMessage('Camera is still loading. Try again.');
+      return;
+    }
+
+    const video = videoRef.current;
+
+    const canvas = document.createElement('canvas');
+    const maxWidth = 1440;
+    const scale = Math.min(1, maxWidth / video.videoWidth);
+    canvas.width = Math.max(1, Math.floor(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.floor(video.videoHeight * scale));
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      setErrorMessage('Unable to access capture canvas.');
+      return;
+    }
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+    await commitCapturedImage(imageDataUrl);
+  };
+
+  const onUploadSelected = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
 
-    setErrorMessage(null);
-    setIsAnalyzing(true);
-
     try {
       const imageDataUrl = await fileToDataUrl(file);
-      const response = await analyzeCapture({ imageDataUrl });
-
-      if (!response.ok || !response.result) {
-        setResult(null);
-        setErrorMessage('Try again');
-        return;
-      }
-
-      setResult(response.result as CaptureResult);
+      await commitCapturedImage(imageDataUrl);
     } catch {
-      setErrorMessage('Try again');
-    } finally {
-      setIsAnalyzing(false);
+      setErrorMessage('Upload failed. Try again.');
     }
   };
 
-  const handleAqquire = async () => {
-    if (!result) return;
-
-    await aqquireIt({
-      displayName: result.displayName,
-      heroImageUrl: result.heroImageUrl,
-      capturedImageUrl: result.capturedImageUrl,
-      category: result.category,
-      priceEstimate: result.priceEstimate,
-      currency: result.currency,
-      supplierName: result.supplierName,
-      supplierUrl: result.supplierUrl,
-      uniqueFlag: result.uniqueFlag,
-      confidence: result.confidence,
-      debugPriceBreakdown: result.debugPriceBreakdown,
-    });
-
-    showToast('In Vault');
-  };
-
   return (
-    <section className="relative flex h-[calc(100dvh-14.5rem)] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/25 p-4 sm:p-6">
+    <section className="relative h-[calc(100dvh-14.5rem)] overflow-hidden rounded-3xl border border-white/10 bg-black/40">
       <input
-        ref={fileInputRef}
+        ref={uploadRef}
         type="file"
         accept="image/*"
         capture="environment"
         className="hidden"
         onChange={(event) => {
-          void onFileSelected(event);
+          void onUploadSelected(event);
         }}
       />
 
-      {!result ? (
-        <div className="relative flex h-full flex-col items-center justify-center gap-8">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(248,220,152,0.16),transparent_40%),radial-gradient(circle_at_80%_65%,rgba(220,165,92,0.12),transparent_45%)]" />
+      <video
+        ref={videoRef}
+        muted
+        playsInline
+        onClick={() => {
+          void snapLiveFrame();
+        }}
+        className="h-full w-full cursor-pointer object-cover"
+      />
 
-          <div className="relative text-center">
-            <p className="font-display text-4xl tracking-[0.2em] text-champagne">AQQUIRE</p>
-            <p className="mt-2 text-xs uppercase tracking-[0.22em] text-pearl/60">Camera First Command</p>
-          </div>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(248,220,152,0.14),transparent_42%),radial-gradient(circle_at_80%_70%,rgba(220,165,92,0.14),transparent_46%)]" />
 
+      <div className="absolute inset-x-0 top-0 z-20 border-b border-white/10 bg-black/35 px-4 py-3 backdrop-blur">
+        <p className="font-display text-2xl tracking-[0.2em] text-champagne">AQQUIRE</p>
+        <p className="text-[11px] uppercase tracking-[0.2em] text-pearl/70">Live camera. Tap screen to capture.</p>
+      </div>
+
+      <div className="absolute inset-x-0 bottom-0 z-20 space-y-3 border-t border-white/10 bg-black/40 p-4 backdrop-blur">
+        <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.16em] text-pearl/70">
+          <span>{cameraReady ? 'Camera ready' : 'Initializing camera'}</span>
           <button
             type="button"
-            disabled={isAnalyzing}
-            onClick={triggerCapture}
-            className="relative h-40 w-40 rounded-full border border-champagne bg-gradient-to-b from-[#f6e7bd] via-[#d8b66f] to-[#9f742f] text-sm font-semibold uppercase tracking-[0.24em] text-obsidian shadow-[0_0_0_6px_rgba(255,217,133,0.1),0_24px_80px_rgba(0,0,0,0.4)] disabled:opacity-60"
+            onClick={() => uploadRef.current?.click()}
+            className="pointer-events-auto rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.15em] text-pearl/85"
           >
-            {isAnalyzing ? 'Reading' : 'Capture'}
+            Upload
           </button>
-
-          {errorMessage ? <p className="text-sm uppercase tracking-[0.18em] text-champagne">{errorMessage}</p> : null}
         </div>
-      ) : (
-        <div className="flex h-full flex-col justify-between gap-4 overflow-hidden">
-          <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/35">
-            <img src={result.heroImageUrl} alt={result.displayName} className="h-[48dvh] w-full object-cover" />
+
+        {debugMode ? (
+          <p className="text-[11px] uppercase tracking-[0.14em] text-champagne/80">
+            Debug enabled: AI target + online lookup active when VITE_OPENAI_API_KEY is set.
+          </p>
+        ) : null}
+
+        {errorMessage ? <p className="text-xs uppercase tracking-[0.14em] text-rose-200">{errorMessage}</p> : null}
+      </div>
+
+      {isCapturing ? (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/65">
+          <div className="rounded-full border border-champagne/45 bg-champagne/10 px-4 py-2 text-xs uppercase tracking-[0.18em] text-champagne">
+            Processing
           </div>
-
-          <div className="space-y-4">
-            <div>
-              <p className="font-display text-3xl text-pearl">{result.displayName}</p>
-              <p className="text-sm uppercase tracking-[0.18em] text-pearl/60">
-                {currency(result.priceEstimate, result.currency)}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => void handleAqquire()}
-                className="rounded-full border border-champagne bg-champagne/20 px-4 py-3 text-xs uppercase tracking-[0.24em] text-champagne"
-              >
-                AQQUIRE IT
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setResult(null);
-                  setErrorMessage(null);
-                }}
-                className="rounded-full border border-white/25 bg-white/5 px-4 py-3 text-xs uppercase tracking-[0.2em] text-pearl/75"
-              >
-                Dismiss
-              </button>
-            </div>
-
-            {debugMode ? (
-              <div className="rounded-2xl border border-champagne/25 bg-black/40 p-3 text-xs text-pearl/75">
-                <p>Supplier: {result.supplierName ?? 'N/A'}</p>
-                <p>Link: {result.supplierUrl ?? 'N/A'}</p>
-                <p>Confidence: {result.confidence?.toFixed(3) ?? 'N/A'}</p>
-                <p>
-                  Breakdown: {result.debugPriceBreakdown?.baseCost ?? 0} / {result.debugPriceBreakdown?.shipping ?? 0} /
-                  {' '}
-                  {result.debugPriceBreakdown?.serviceFee ?? 0}
-                </p>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      )}
-
-      {toast ? (
-        <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-champagne/40 bg-obsidian/95 px-4 py-2 text-xs uppercase tracking-[0.2em] text-champagne">
-          {toast}
         </div>
       ) : null}
     </section>

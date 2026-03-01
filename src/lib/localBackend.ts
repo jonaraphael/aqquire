@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { CATEGORY_OPTIONS, VAULT_STATUSES } from '@/lib/constants';
 import { useAuth } from '@/lib/auth';
+import { analyzeWithOpenAi } from '@/lib/openaiLookup';
 
 const STORAGE_KEY = 'aqquire.local.db.v1';
 const MIN_FEED_PRICE = 1000;
@@ -1702,6 +1703,25 @@ export function useRotateFollowToken() {
 
 export function useAnalyzeCapture() {
   return useCallback(async (args: { imageDataUrl: string }) => {
+    try {
+      if (import.meta.env.VITE_OPENAI_API_KEY) {
+        const result = await analyzeWithOpenAi(args.imageDataUrl);
+        return {
+          ok: true,
+          result: {
+            ...result,
+            debugPriceBreakdown: {
+              baseCost: Number((result.priceEstimate * 0.78).toFixed(2)),
+              shipping: Number((result.priceEstimate * 0.03).toFixed(2)),
+              serviceFee: Number((result.priceEstimate * 0.19).toFixed(2)),
+            },
+          },
+        };
+      }
+    } catch {
+      // Fall back to deterministic local matching when OpenAI lookup fails.
+    }
+
     return {
       ok: true,
       result: analyzeCaptureLocally(args.imageDataUrl),

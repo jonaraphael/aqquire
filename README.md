@@ -34,6 +34,11 @@ Optional env vars:
 - `VITE_DEMO_MODE=1` (bypass WorkOS auth and run with a local demo user)
 - `VITE_ROUTER_MODE=hash` (recommended for static hosting)
 - `VITE_BASE_PATH=/repo-name/` (for project-site deploys)
+- `VITE_OPENAI_API_KEY` (enables live AQQUIRE image target identification + online lookup)
+- `VITE_OPENAI_VISION_MODEL` (default `gpt-5.2`)
+- `VITE_OPENAI_SEARCH_MODEL` (default `gpt-5.2`)
+
+Note: `VITE_*` env vars are exposed in frontend bundles. Use demo-only keys in client-side deployments.
 
 3. Start development server:
 
