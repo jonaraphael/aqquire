@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { BottomNav } from '@/components/BottomNav';
 import { cn } from '@/lib/utils';
 
 const AQQUIRE_PROCUREMENT_COMPLETE_EVENT = 'aqquire:procurement-complete';
+const FEED_OPEN_FOLLOW_EVENT = 'feed:open-follow';
 const TOAST_SWIPE_DISMISS_PX = 28;
 
 export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const isAqquire = location.pathname === '/aqquire';
+  const isFeed = location.pathname === '/feed';
+  const isVault = location.pathname === '/vault';
   const [procurementToast, setProcurementToast] = useState<string | null>(null);
   const touchStartY = useRef<number | null>(null);
   const pointerStartY = useRef<number | null>(null);
@@ -42,6 +45,27 @@ export function AppLayout() {
             <p className="font-display text-2xl tracking-[0.22em] text-champagne">AQQUIRE</p>
             <p className="text-[10px] uppercase tracking-[0.28em] text-pearl/55">Want it. Get it.</p>
           </div>
+
+          {isFeed ? (
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent(FEED_OPEN_FOLLOW_EVENT));
+              }}
+              className="rounded-full border border-champagne/45 bg-champagne/10 px-4 py-2 text-xs uppercase tracking-[0.18em] text-champagne hover:bg-champagne/20"
+            >
+              Follow
+            </button>
+          ) : null}
+
+          {isVault ? (
+            <Link
+              to="/vault/profile"
+              className="rounded-full border border-champagne/45 bg-champagne/12 px-4 py-2 text-xs uppercase tracking-[0.18em] text-champagne"
+            >
+              Profile
+            </Link>
+          ) : null}
         </header>
 
         <main className={cn('flex-1', isAqquire ? 'overflow-hidden' : '')}>

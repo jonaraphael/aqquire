@@ -12,6 +12,8 @@ import {
   useViewerContext,
 } from '@/lib/localBackend';
 
+const FEED_OPEN_FOLLOW_EVENT = 'feed:open-follow';
+
 export function FeedPage() {
   const viewerContext = useViewerContext();
   const debugMode = useDebugMode(viewerContext?.user.debugEnabled);
@@ -60,6 +62,18 @@ export function FeedPage() {
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
   }, [items.length]);
+
+  useEffect(() => {
+    const handleOpenFollow = () => {
+      setCameraError(null);
+      setFollowOpen(true);
+    };
+
+    window.addEventListener(FEED_OPEN_FOLLOW_EVENT, handleOpenFollow);
+    return () => {
+      window.removeEventListener(FEED_OPEN_FOLLOW_EVENT, handleOpenFollow);
+    };
+  }, []);
 
   useEffect(() => {
     if (!followOpen || !videoRef.current) return;
@@ -181,19 +195,7 @@ export function FeedPage() {
   return (
     <section className="space-y-4">
       <div className="sticky top-0 z-30 -mx-3 border-b border-white/10 bg-obsidian/95 px-3 pb-3 pt-1 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h1 className="font-display text-2xl tracking-[0.12em] text-pearl">Feed</h1>
-          <button
-            type="button"
-            onClick={() => {
-              setCameraError(null);
-              setFollowOpen(true);
-            }}
-            className="rounded-full border border-champagne/45 bg-champagne/10 px-4 py-2 text-xs uppercase tracking-[0.18em] text-champagne hover:bg-champagne/20"
-          >
-            Follow
-          </button>
-        </div>
+        <h1 className="mb-3 font-display text-2xl tracking-[0.12em] text-pearl">Feed</h1>
 
         <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
           {CATEGORY_OPTIONS.map((category) => {

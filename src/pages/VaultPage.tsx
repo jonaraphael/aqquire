@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { StatusPill } from '@/components/StatusPill';
 import { TrophyCarousel } from '@/components/TrophyCarousel';
 import { currency } from '@/lib/utils';
@@ -108,18 +107,9 @@ export function VaultPage() {
 
   return (
     <section className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-3xl tracking-[0.14em] text-pearl">Vault</h1>
-          <p className="text-xs uppercase tracking-[0.2em] text-pearl/60">Status Ledger</p>
-        </div>
-
-        <Link
-          to="/vault/profile"
-          className="rounded-full border border-champagne/45 bg-champagne/12 px-4 py-2 text-xs uppercase tracking-[0.18em] text-champagne"
-        >
-          Profile
-        </Link>
+      <div>
+        <h1 className="font-display text-3xl tracking-[0.14em] text-pearl">Vault</h1>
+        <p className="text-xs uppercase tracking-[0.2em] text-pearl/60">Status Ledger</p>
       </div>
 
       <TrophyCarousel trophies={trophies?.trophies ?? []} />
