@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  type CaptureAnalysisStageUpdate,
   useAnalyzeCapture,
   useFinalizeCaptureProcuring,
   useStartCaptureProcuring,
+  useUpdateCaptureProcuringStage,
   useViewerContext,
 } from '@/lib/localBackend';
 import { useDebugMode } from '@/hooks/useDebugMode';
@@ -73,6 +75,14 @@ function sleep(milliseconds: number) {
   });
 }
 
+function buildDebugPriceBreakdown(priceEstimate: number) {
+  return {
+    baseCost: Number((priceEstimate * 0.78).toFixed(2)),
+    shipping: Number((priceEstimate * 0.03).toFixed(2)),
+    serviceFee: Number((priceEstimate * 0.19).toFixed(2)),
+  };
+}
+
 export function AqquirePage() {
   const navigate = useNavigate();
   const viewerContext = useViewerContext();
@@ -80,6 +90,7 @@ export function AqquirePage() {
 
   const analyzeCapture = useAnalyzeCapture();
   const startCaptureProcuring = useStartCaptureProcuring();
+  const updateCaptureProcuringStage = useUpdateCaptureProcuringStage();
   const finalizeCaptureProcuring = useFinalizeCaptureProcuring();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -151,7 +162,50 @@ export function AqquirePage() {
 
       void (async () => {
         try {
-          const response = await analyzeCapture({ imageDataUrl });
+          const response = await analyzeCapture({
+            imageDataUrl,
+            onStage: async (stage: CaptureAnalysisStageUpdate) => {
+              try {
+                if (stage.stage === 'target') {
+                  await updateCaptureProcuringStage({
+                    vaultItemId: pending.vaultItemId,
+                    displayName: stage.displayName,
+                    category: stage.category,
+                    confidence: stage.confidence,
+                  });
+                  return;
+                }
+
+                if (stage.stage === 'price') {
+                  const roundedPrice =
+                    typeof stage.priceEstimate === 'number' && Number.isFinite(stage.priceEstimate)
+                      ? Math.round(stage.priceEstimate)
+                      : undefined;
+
+                  await updateCaptureProcuringStage({
+                    vaultItemId: pending.vaultItemId,
+                    displayName: stage.displayName,
+                    priceEstimate: roundedPrice,
+                    currency: stage.currency,
+                    debugPriceBreakdown: roundedPrice && roundedPrice > 0 ? buildDebugPriceBreakdown(roundedPrice) : undefined,
+                  });
+                  return;
+                }
+
+                await updateCaptureProcuringStage({
+                  vaultItemId: pending.vaultItemId,
+                  displayName: stage.displayName,
+                  heroImageUrl: stage.heroImageUrl,
+                  priceEstimate: stage.priceEstimate,
+                  currency: stage.currency,
+                  supplierName: stage.supplierName,
+                  supplierUrl: stage.supplierUrl,
+                });
+              } catch {
+                // Stage updates are best-effort; finalization still applies complete data.
+              }
+            },
+          });
           if (!response.ok || !response.result) {
             throw new Error('Capture analysis failed');
           }
@@ -193,7 +247,7 @@ export function AqquirePage() {
       setIsCapturing(false);
       captureLockRef.current = false;
     }
-  }, [analyzeCapture, finalizeCaptureProcuring, navigate, startCaptureProcuring]);
+  }, [analyzeCapture, finalizeCaptureProcuring, navigate, startCaptureProcuring, updateCaptureProcuringStage]);
 
   const snapLiveFrame = useCallback(async () => {
     if (!videoRef.current || videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {

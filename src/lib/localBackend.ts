@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { CATEGORY_OPTIONS, VAULT_STATUSES } from '@/lib/constants';
 import { useAuth } from '@/lib/auth';
-import { analyzeWithOpenAi } from '@/lib/openaiLookup';
+import { analyzeWithOpenAiStaged, type OpenAiLookupStageUpdate } from '@/lib/openaiLookup';
 
 const STORAGE_KEY = 'aqquire.local.db.v1';
 const MIN_FEED_PRICE = 1000;
@@ -1422,6 +1422,8 @@ export interface CaptureResult {
   debugPriceBreakdown?: PriceBreakdown;
 }
 
+export interface CaptureAnalysisStageUpdate extends OpenAiLookupStageUpdate {}
+
 interface StartCaptureProcuringArgs {
   capturedImageUrl: string;
 }
@@ -1442,6 +1444,67 @@ interface AqquireItArgs {
 
 interface FinalizeCaptureProcuringArgs extends AqquireItArgs {
   vaultItemId: string;
+}
+
+interface UpdateCaptureProcuringStageArgs {
+  vaultItemId: string;
+  displayName?: string;
+  heroImageUrl?: string;
+  capturedImageUrl?: string;
+  category?: Category;
+  priceEstimate?: number;
+  currency?: string;
+  supplierName?: string;
+  supplierUrl?: string;
+  uniqueFlag?: boolean;
+  confidence?: number;
+  debugPriceBreakdown?: PriceBreakdown;
+}
+
+function buildPriceBreakdown(priceEstimate: number): PriceBreakdown {
+  return {
+    baseCost: Number((priceEstimate * 0.78).toFixed(2)),
+    shipping: Number((priceEstimate * 0.03).toFixed(2)),
+    serviceFee: Number((priceEstimate * 0.19).toFixed(2)),
+  };
+}
+
+function upsertFeedItemForVaultItem(db: Database, viewer: UserRecord, item: VaultItemRecord) {
+  if (item.priceEstimate < MIN_FEED_PRICE) return;
+
+  const existingFeed = db.feedItems.find((feedItem) => feedItem.sourceVaultItemId === item.id);
+  if (existingFeed) {
+    existingFeed.displayName = item.displayName;
+    existingFeed.heroImageUrl = item.heroImageUrl;
+    existingFeed.category = item.category;
+    existingFeed.price = item.priceEstimate;
+    existingFeed.currency = item.currency;
+    existingFeed.supplierName = item.supplierName;
+    existingFeed.supplierUrl = item.supplierUrl;
+    existingFeed.uniqueFlag = item.uniqueFlag;
+    return;
+  }
+
+  db.feedItems.push({
+    id: createId(db, 'feed'),
+    displayName: item.displayName,
+    heroImageUrl: item.heroImageUrl,
+    category: item.category,
+    price: item.priceEstimate,
+    currency: item.currency,
+    primaryUserId: viewer.id,
+    primaryUserHandleSnapshot: viewer.displayHandle,
+    primaryUserAvatarUrl: viewer.avatarUrl,
+    associatedCount: 1,
+    createdAt: item.createdAt,
+    freshnessScore: item.createdAt,
+    sourceVaultItemId: item.id,
+    minPriceGateEnforced: true,
+    brand: undefined,
+    supplierName: item.supplierName,
+    supplierUrl: item.supplierUrl,
+    uniqueFlag: item.uniqueFlag,
+  });
 }
 
 function startCaptureProcuringInDatabase(db: Database, identity: Identity, args: StartCaptureProcuringArgs) {
@@ -1478,6 +1541,77 @@ function startCaptureProcuringInDatabase(db: Database, identity: Identity, args:
   };
 }
 
+function updateCaptureProcuringStageInDatabase(db: Database, identity: Identity, args: UpdateCaptureProcuringStageArgs) {
+  const viewer = requireViewer(db, identity);
+  const item = db.vaultItems.find((entry) => entry.id === args.vaultItemId && entry.userId === viewer.id);
+
+  if (!item) {
+    throw new Error('Vault item not found');
+  }
+
+  if (item.status !== 'pending') {
+    return {
+      updated: false,
+      reason: 'not_pending',
+    };
+  }
+
+  if (typeof args.displayName === 'string' && args.displayName.trim().length > 0) {
+    item.displayName = args.displayName.trim().slice(0, 140);
+  }
+
+  if (typeof args.heroImageUrl === 'string' && args.heroImageUrl.trim().length > 0) {
+    item.heroImageUrl = args.heroImageUrl;
+  }
+
+  if (typeof args.capturedImageUrl === 'string' && args.capturedImageUrl.trim().length > 0) {
+    item.capturedImageUrl = args.capturedImageUrl;
+  }
+
+  if (typeof args.category === 'string') {
+    item.category = args.category;
+  }
+
+  if (typeof args.priceEstimate === 'number' && Number.isFinite(args.priceEstimate) && args.priceEstimate >= 0) {
+    item.priceEstimate = Math.round(args.priceEstimate);
+  }
+
+  if (typeof args.currency === 'string' && args.currency.trim().length > 0) {
+    item.currency = args.currency.trim().toUpperCase().slice(0, 3);
+  }
+
+  if (typeof args.supplierName === 'string') {
+    item.supplierName = args.supplierName.trim() || undefined;
+  }
+
+  if (typeof args.supplierUrl === 'string') {
+    item.supplierUrl = args.supplierUrl.trim() || undefined;
+  }
+
+  if (typeof args.uniqueFlag === 'boolean') {
+    item.uniqueFlag = args.uniqueFlag;
+  }
+
+  if (typeof args.confidence === 'number' && Number.isFinite(args.confidence)) {
+    item.confidence = args.confidence;
+  }
+
+  if (args.debugPriceBreakdown) {
+    item.debugPriceBreakdown = args.debugPriceBreakdown;
+  }
+
+  item.updatedAt = Date.now();
+
+  if (item.supplierUrl && item.priceEstimate >= MIN_FEED_PRICE) {
+    upsertFeedItemForVaultItem(db, viewer, item);
+  }
+
+  return {
+    updated: true,
+    vaultItemId: item.id,
+  };
+}
+
 function finalizeCaptureProcuringInDatabase(db: Database, identity: Identity, args: FinalizeCaptureProcuringArgs) {
   const viewer = requireViewer(db, identity);
   const item = db.vaultItems.find((entry) => entry.id === args.vaultItemId && entry.userId === viewer.id);
@@ -1506,32 +1640,7 @@ function finalizeCaptureProcuringInDatabase(db: Database, identity: Identity, ar
   item.debugPriceBreakdown = args.debugPriceBreakdown;
   item.updatedAt = Date.now();
 
-  if (args.priceEstimate >= MIN_FEED_PRICE) {
-    const existingFeed = db.feedItems.find((feedItem) => feedItem.sourceVaultItemId === item.id);
-
-    if (!existingFeed) {
-      db.feedItems.push({
-        id: createId(db, 'feed'),
-        displayName: args.displayName,
-        heroImageUrl: args.heroImageUrl,
-        category: args.category,
-        price: args.priceEstimate,
-        currency: args.currency,
-        primaryUserId: viewer.id,
-        primaryUserHandleSnapshot: viewer.displayHandle,
-        primaryUserAvatarUrl: viewer.avatarUrl,
-        associatedCount: 1,
-        createdAt: item.createdAt,
-        freshnessScore: Date.now(),
-        sourceVaultItemId: item.id,
-        minPriceGateEnforced: true,
-        brand: undefined,
-        supplierName: args.supplierName,
-        supplierUrl: args.supplierUrl,
-        uniqueFlag: args.uniqueFlag,
-      });
-    }
-  }
+  upsertFeedItemForVaultItem(db, viewer, item);
 
   return {
     updated: true,
@@ -1888,6 +1997,21 @@ export function useStartCaptureProcuring() {
   );
 }
 
+export function useUpdateCaptureProcuringStage() {
+  const identity = useIdentity();
+
+  return useCallback(
+    async (args: UpdateCaptureProcuringStageArgs) => {
+      if (!identity) {
+        throw new Error('Not authenticated');
+      }
+
+      return mutateDatabase((db) => updateCaptureProcuringStageInDatabase(db, identity, args));
+    },
+    [identity],
+  );
+}
+
 export function useFinalizeCaptureProcuring() {
   const identity = useIdentity();
 
@@ -1919,17 +2043,17 @@ export function useFailCaptureProcuring() {
 }
 
 export function useAnalyzeCapture() {
-  return useCallback(async (args: { imageDataUrl: string }) => {
-    const result = await analyzeWithOpenAi(args.imageDataUrl);
+  return useCallback(async (args: { imageDataUrl: string; onStage?: (update: CaptureAnalysisStageUpdate) => void | Promise<void> }) => {
+    const result = await analyzeWithOpenAiStaged(args.imageDataUrl, async (stage) => {
+      if (args.onStage) {
+        await args.onStage(stage);
+      }
+    });
     return {
       ok: true,
       result: {
         ...result,
-        debugPriceBreakdown: {
-          baseCost: Number((result.priceEstimate * 0.78).toFixed(2)),
-          shipping: Number((result.priceEstimate * 0.03).toFixed(2)),
-          serviceFee: Number((result.priceEstimate * 0.19).toFixed(2)),
-        },
+        debugPriceBreakdown: buildPriceBreakdown(result.priceEstimate),
       },
     };
   }, []);

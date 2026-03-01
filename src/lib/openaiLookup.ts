@@ -11,6 +11,13 @@ interface TargetDetection {
   searchQuery: string;
 }
 
+interface PriceEstimateLookup {
+  displayName?: string;
+  priceEstimate?: number;
+  currency?: string;
+  priceConfidence?: number;
+}
+
 interface OnlineLookup {
   displayName: string;
   heroImageUrl?: string;
@@ -42,6 +49,21 @@ export interface OpenAiLookupResult {
   brandHints: string[];
   keyAttributes: string[];
   alternates: string[];
+}
+
+export interface OpenAiLookupStageUpdate {
+  stage: 'target' | 'price' | 'purchase';
+  displayName?: string;
+  category?: Category;
+  confidence?: number;
+  canonicalName?: string;
+  brandHints?: string[];
+  keyAttributes?: string[];
+  priceEstimate?: number;
+  currency?: string;
+  supplierName?: string;
+  supplierUrl?: string;
+  heroImageUrl?: string;
 }
 
 interface ResponsesPayload {
@@ -252,41 +274,80 @@ async function detectPrimaryTarget(imageDataUrl: string): Promise<TargetDetectio
   };
 }
 
-async function lookupOnline(target: TargetDetection): Promise<OnlineLookup> {
+async function estimateNewPrice(target: TargetDetection): Promise<PriceEstimateLookup> {
   const model = import.meta.env.VITE_OPENAI_SEARCH_MODEL || 'gpt-5.2';
   const reasoningEffort = normalizeReasoningEffort(import.meta.env.VITE_OPENAI_SEARCH_REASONING_EFFORT, 'medium');
   const payload = await callResponsesApi({
     model,
     reasoning: { effort: reasoningEffort },
     tools: [{ type: 'web_search_preview' }],
-    input: `Use web search to find the best real-world product match for "${target.searchQuery}".
+    input: `Use web search to estimate the current new-market price for this item:
+- canonicalName: "${target.canonicalName}"
+- category: "${target.category}"
+- searchQuery: "${target.searchQuery}"
+
 Return strict JSON only with keys:
-displayName, heroImageUrl, heroImageAlternates, heroImageSource, heroImageQuality, priceEstimate, currency, supplierName, supplierUrl, priceSourceUrl, purchasable, priceConfidence, uniqueFlag.
+displayName, priceEstimate, currency, priceConfidence.
+
 Rules:
-- heroImageUrl must be a direct URL to a premium marketing image and should not be a thumbnail.
-- Prefer official manufacturer source materials first (brand product page image/CDN, brand press kit, lookbook).
-- If manufacturer assets are unavailable, use an authorized luxury retailer listing image.
-- Favor high resolution images (ideally >= 1600px longest side, studio quality, clean background).
-- Avoid social media screenshots, user-generated images, watermarks, collage graphics, or low-resolution previews.
-- heroImageAlternates should include up to 3 additional direct image URLs ranked by quality.
-- heroImageSource should be "manufacturer", "authorized_retailer", or "other".
-- heroImageQuality should be "high", "medium", or "low".
-- supplierUrl must be a direct listing/product detail page for this exact item (not editorial/search/category pages).
-- For category "Automobiles", supplierUrl may be a dealer inventory page or manufacturer build/order page for the same model/trim.
-- priceEstimate must be the currently listed purchase price on supplierUrl.
-- priceSourceUrl must be the exact URL where priceEstimate was read (usually same as supplierUrl).
-- purchasable must be true when the page clearly supports purchasing flow:
-  add-to-cart/buy flow for standard commerce, or
-  dealer/order/reservation inquiry flow for automobiles.
-- priceConfidence is 0-1 confidence that the price is exact and current.
-- If no purchasable page with visible price can be found, return supplierUrl: null, priceEstimate: null, purchasable: false.
-- If unknown, use null values but still return best available non-null heroImageUrl when possible.`,
+- priceEstimate should reflect what a buyer should expect to pay new today.
+- Include shipping/tax only if that is the only visible price and state confidence accordingly.
+- currency must be a 3-letter ISO code.
+- priceConfidence must be 0-1 and reflect certainty that the estimate is current and exact.
+- If no reliable estimate exists, return priceEstimate: null.`,
+  });
+
+  const text = responseText(payload);
+  const parsed = parseJsonFromText<Partial<PriceEstimateLookup>>(text);
+  if (!parsed) {
+    throw new Error('Failed to parse OpenAI price estimate response');
+  }
+
+  return {
+    displayName: parsed.displayName ? String(parsed.displayName) : undefined,
+    priceEstimate: normalizePriceValue(parsed.priceEstimate),
+    currency: normalizeCurrencyCode(parsed.currency ? String(parsed.currency) : undefined) ?? 'USD',
+    priceConfidence:
+      typeof parsed.priceConfidence === 'number' && Number.isFinite(parsed.priceConfidence)
+        ? Math.max(0, Math.min(1, parsed.priceConfidence))
+        : undefined,
+  };
+}
+
+async function lookupPurchaseOffer(target: TargetDetection, estimated: PriceEstimateLookup): Promise<OnlineLookup> {
+  const model = import.meta.env.VITE_OPENAI_SEARCH_MODEL || 'gpt-5.2';
+  const reasoningEffort = normalizeReasoningEffort(import.meta.env.VITE_OPENAI_SEARCH_REASONING_EFFORT, 'high');
+  const payload = await callResponsesApi({
+    model,
+    reasoning: { effort: reasoningEffort },
+    tools: [{ type: 'web_search_preview' }],
+    input: `Use web search to find a current purchasable listing for this item:
+- canonicalName: "${target.canonicalName}"
+- category: "${target.category}"
+- searchQuery: "${target.searchQuery}"
+- estimatedPrice: ${typeof estimated.priceEstimate === 'number' ? estimated.priceEstimate : 'null'}
+- estimatedCurrency: "${estimated.currency ?? 'USD'}"
+
+Return strict JSON only with keys:
+displayName, heroImageUrl, heroImageAlternates, heroImageSource, heroImageQuality, supplierName, supplierUrl, priceSourceUrl, priceEstimate, currency, purchasable, priceConfidence, uniqueFlag.
+
+Rules:
+- supplierUrl must be a direct listing/product detail page for this exact item.
+- For category "Automobiles", supplierUrl may be a dealer inventory page or manufacturer order/reservation page.
+- priceEstimate must exactly match the currently listed purchase price shown on priceSourceUrl.
+- If no valid purchasable listing with visible price exists, return supplierUrl: null, priceEstimate: null, purchasable: false.
+- Prefer official manufacturer stores first, then authorized retailers.
+- heroImageUrl must be a direct premium marketing image URL, not a thumbnail.
+- Prefer official manufacturer source material for heroImageUrl when possible.
+- heroImageAlternates may include up to 3 additional direct image URLs.
+- currency must be a 3-letter ISO code.
+- priceConfidence must be 0-1 and reflect confidence in exactness/currentness.`,
   });
 
   const text = responseText(payload);
   const parsed = parseJsonFromText<Partial<OnlineLookup>>(text);
   if (!parsed) {
-    throw new Error('Failed to parse OpenAI web lookup response');
+    throw new Error('Failed to parse OpenAI purchase lookup response');
   }
 
   return {
@@ -298,7 +359,7 @@ Rules:
     heroImageSource: parsed.heroImageSource ? String(parsed.heroImageSource) : undefined,
     heroImageQuality: parsed.heroImageQuality ? String(parsed.heroImageQuality) : undefined,
     priceEstimate: normalizePriceValue(parsed.priceEstimate),
-    currency: normalizeCurrencyCode(parsed.currency ? String(parsed.currency) : undefined) ?? 'USD',
+    currency: normalizeCurrencyCode(parsed.currency ? String(parsed.currency) : undefined) ?? estimated.currency ?? 'USD',
     supplierName: parsed.supplierName ? String(parsed.supplierName) : undefined,
     supplierUrl: normalizeWebUrl(parsed.supplierUrl ? String(parsed.supplierUrl) : undefined),
     priceSourceUrl: normalizeWebUrl(parsed.priceSourceUrl ? String(parsed.priceSourceUrl) : undefined),
@@ -306,80 +367,8 @@ Rules:
     priceConfidence:
       typeof parsed.priceConfidence === 'number' && Number.isFinite(parsed.priceConfidence)
         ? Math.max(0, Math.min(1, parsed.priceConfidence))
-        : undefined,
+        : estimated.priceConfidence,
     uniqueFlag: typeof parsed.uniqueFlag === 'boolean' ? parsed.uniqueFlag : undefined,
-  };
-}
-
-async function validatePurchaseOffer(target: TargetDetection, online: OnlineLookup): Promise<OnlineLookup> {
-  const candidateUrl = normalizeWebUrl(online.priceSourceUrl || online.supplierUrl);
-  const model = import.meta.env.VITE_OPENAI_SEARCH_MODEL || 'gpt-5.2';
-  const reasoningEffort = normalizeReasoningEffort(import.meta.env.VITE_OPENAI_SEARCH_REASONING_EFFORT, 'high');
-
-  const payload = await callResponsesApi({
-    model,
-    reasoning: { effort: reasoningEffort },
-    tools: [{ type: 'web_search_preview' }],
-    input: `Validate or replace this purchasable listing for the item below.
-Item:
-- canonicalName: "${target.canonicalName}"
-- category: "${target.category}"
-- searchQuery: "${target.searchQuery}"
-Candidate listing:
-- supplierName: "${online.supplierName ?? ''}"
-- supplierUrl: "${candidateUrl ?? ''}"
-- candidatePrice: ${typeof online.priceEstimate === 'number' ? online.priceEstimate : 'null'}
-
-Return strict JSON only with keys:
-supplierName, supplierUrl, priceEstimate, currency, priceSourceUrl, purchasable, priceConfidence.
-
-Rules:
-- supplierUrl must be a direct product page where this exact item can be purchased now.
-- For category "Automobiles", supplierUrl may be a dealer inventory page or manufacturer order/reservation page.
-- priceEstimate must exactly match the currently listed purchase price shown on priceSourceUrl.
-- If candidate listing is invalid, not purchasable, mismatched, or has no visible price, find a better purchasable listing.
-- Prefer official brand stores or authorized retailers.
-- If no valid purchasable listing with visible price exists, return supplierUrl: null, priceEstimate: null, purchasable: false.
-- currency must be a 3-letter ISO code.
-- priceConfidence must be 0-1 and reflect confidence in exactness/currentness.`,
-  });
-
-  const text = responseText(payload);
-  const parsed = parseJsonFromText<Partial<OnlineLookup>>(text);
-  if (!parsed) {
-    return online;
-  }
-
-  const hasSupplierUrl = Object.prototype.hasOwnProperty.call(parsed, 'supplierUrl');
-  const hasPriceSourceUrl = Object.prototype.hasOwnProperty.call(parsed, 'priceSourceUrl');
-  const hasPriceEstimate = Object.prototype.hasOwnProperty.call(parsed, 'priceEstimate');
-  const hasCurrency = Object.prototype.hasOwnProperty.call(parsed, 'currency');
-  const hasPurchasable = Object.prototype.hasOwnProperty.call(parsed, 'purchasable');
-  const hasPriceConfidence = Object.prototype.hasOwnProperty.call(parsed, 'priceConfidence');
-
-  return {
-    ...online,
-    supplierName: parsed.supplierName ? String(parsed.supplierName) : online.supplierName,
-    supplierUrl: hasSupplierUrl
-      ? normalizeWebUrl(parsed.supplierUrl ? String(parsed.supplierUrl) : undefined)
-      : online.supplierUrl,
-    priceSourceUrl: hasPriceSourceUrl
-      ? normalizeWebUrl(parsed.priceSourceUrl ? String(parsed.priceSourceUrl) : undefined)
-      : online.priceSourceUrl ?? online.supplierUrl,
-    priceEstimate: hasPriceEstimate ? normalizePriceValue(parsed.priceEstimate) : online.priceEstimate,
-    currency: hasCurrency
-      ? normalizeCurrencyCode(parsed.currency ? String(parsed.currency) : undefined)
-      : online.currency,
-    purchasable: hasPurchasable
-      ? typeof parsed.purchasable === 'boolean'
-        ? parsed.purchasable
-        : undefined
-      : online.purchasable,
-    priceConfidence: hasPriceConfidence
-      ? typeof parsed.priceConfidence === 'number' && Number.isFinite(parsed.priceConfidence)
-        ? Math.max(0, Math.min(1, parsed.priceConfidence))
-        : undefined
-      : online.priceConfidence,
   };
 }
 
@@ -484,21 +473,57 @@ async function optimizeDataUrlForVision(imageDataUrl: string): Promise<string> {
   }
 }
 
-export async function analyzeWithOpenAi(imageDataUrl: string): Promise<OpenAiLookupResult> {
+export async function analyzeWithOpenAiStaged(
+  imageDataUrl: string,
+  onStage?: (update: OpenAiLookupStageUpdate) => void | Promise<void>,
+): Promise<OpenAiLookupResult> {
   const normalizedDataUrl = await optimizeDataUrlForVision(imageDataUrl);
 
   const target = await detectPrimaryTarget(normalizedDataUrl);
-  const initialOnline = await lookupOnline(target);
-  const online = await validatePurchaseOffer(target, initialOnline).catch(() => initialOnline);
+  await onStage?.({
+    stage: 'target',
+    displayName: target.canonicalName,
+    category: target.category,
+    confidence: target.confidence,
+    canonicalName: target.canonicalName,
+    brandHints: target.brandHints,
+    keyAttributes: target.keyAttributes,
+  });
+
+  const estimated = await estimateNewPrice(target);
+  const estimatedPrice =
+    typeof estimated.priceEstimate === 'number' && Number.isFinite(estimated.priceEstimate)
+      ? Math.round(estimated.priceEstimate)
+      : undefined;
+  const estimatedCurrency = estimated.currency || 'USD';
+  const estimatedDisplayName = estimated.displayName || target.canonicalName;
+  await onStage?.({
+    stage: 'price',
+    displayName: estimatedDisplayName,
+    priceEstimate: estimatedPrice,
+    currency: estimatedCurrency,
+  });
+
+  const online = await lookupPurchaseOffer(target, estimated);
   const purchasableOffer = requirePurchasableOffer(online);
+  const resolvedHeroImageUrl = resolvedImageUrl(online, normalizedDataUrl);
+  await onStage?.({
+    stage: 'purchase',
+    displayName: online.displayName || estimatedDisplayName,
+    priceEstimate: purchasableOffer.priceEstimate,
+    currency: online.currency || estimatedCurrency,
+    supplierName: online.supplierName,
+    supplierUrl: purchasableOffer.supplierUrl,
+    heroImageUrl: resolvedHeroImageUrl,
+  });
 
   return {
-    displayName: online.displayName || target.canonicalName,
-    heroImageUrl: resolvedImageUrl(online, normalizedDataUrl),
+    displayName: online.displayName || estimatedDisplayName,
+    heroImageUrl: resolvedHeroImageUrl,
     capturedImageUrl: normalizedDataUrl,
     category: target.category,
     priceEstimate: purchasableOffer.priceEstimate,
-    currency: online.currency || 'USD',
+    currency: online.currency || estimatedCurrency,
     supplierName: online.supplierName,
     supplierUrl: purchasableOffer.supplierUrl,
     uniqueFlag: online.uniqueFlag ?? false,
@@ -508,4 +533,8 @@ export async function analyzeWithOpenAi(imageDataUrl: string): Promise<OpenAiLoo
     keyAttributes: target.keyAttributes,
     alternates: [],
   };
+}
+
+export async function analyzeWithOpenAi(imageDataUrl: string): Promise<OpenAiLookupResult> {
+  return analyzeWithOpenAiStaged(imageDataUrl);
 }
