@@ -33,6 +33,9 @@ export function ProfilePage() {
 
   const defaultPayment = profile.defaultPaymentMethod as any;
   const defaultShipping = profile.defaultShippingAddress as any;
+  const topSpenderPercentLabel = profile.spenderPercentile >= 10
+    ? profile.spenderPercentile.toFixed(1)
+    : profile.spenderPercentile.toFixed(2);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -71,7 +74,7 @@ export function ProfilePage() {
       <div className="rounded-3xl border border-white/12 bg-white/[0.04] p-5">
         <p className="font-display text-3xl text-pearl">{profile.displayHandle}</p>
         <p className="mt-2 text-xs uppercase tracking-[0.2em] text-pearl/60">Tier {profile.tier}</p>
-        <p className="mt-1 text-sm text-pearl/80">Spender percentile: {profile.spenderPercentile.toFixed(3)}%</p>
+        <p className="mt-1 text-sm text-pearl/80">Top {topSpenderPercentLabel}% of spenders</p>
         <p className="mt-1 text-sm text-pearl/80">Settled spend: {currency(profile.lifetimeSpendSettled)}</p>
       </div>
 

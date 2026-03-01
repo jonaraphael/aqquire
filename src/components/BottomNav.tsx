@@ -12,7 +12,7 @@ export function BottomNav() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-champagne/20 bg-obsidian/95 px-4 pb-[max(env(safe-area-inset-bottom),0.8rem)] pt-3 backdrop-blur-lg">
       <div className="mx-auto grid w-full max-w-3xl grid-cols-3 items-center gap-4">
-        <NavButton to="/feed" label="Feed" />
+        <NavButton to="/feed" label="Feed" icon={<FeedIcon />} />
         <ShutterButton
           isAqquire={isAqquire}
           onPress={() => {
@@ -64,12 +64,22 @@ function ShutterButton({ isAqquire, onPress }: { isAqquire: boolean; onPress: ()
   );
 }
 
+function FeedIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <rect x="3.2" y="4.2" width="17.6" height="15.6" rx="3" />
+      <path d="M7.2 8.2h9.6M7.2 12h9.6M7.2 15.8h6.1" />
+      <path d="M18.2 7.3l.4.8.9.1-.7.7.2 1-.8-.4-.8.4.2-1-.7-.7.9-.1.4-.8Z" />
+    </svg>
+  );
+}
+
 function VaultIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <rect x="3" y="4" width="18" height="16" rx="3" />
-      <circle cx="12" cy="12" r="3.2" />
-      <path d="M12 8.8v1.4M12 13.8v1.4M8.8 12h1.4M13.8 12h1.4" />
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M12 3.5 5.4 6.1v5.3c0 4.1 2.6 7.8 6.6 9.1 4-1.3 6.6-5 6.6-9.1V6.1L12 3.5Z" />
+      <rect x="9.1" y="10.2" width="5.8" height="4.8" rx="1.1" />
+      <path d="M10.3 10.2V9.1A1.7 1.7 0 0 1 12 7.4a1.7 1.7 0 0 1 1.7 1.7v1.1" />
     </svg>
   );
 }
