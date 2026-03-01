@@ -21,6 +21,10 @@ function priceDisplayLabel(item: any) {
   return currency(item.priceEstimate, item.currency);
 }
 
+function isReasoningPending(item: any) {
+  return item.status === 'pending' && (!item.priceEstimate || item.priceEstimate <= 0);
+}
+
 function SwipeableVaultImage({
   item,
   className,
@@ -146,6 +150,13 @@ export function VaultPage() {
 
               <p className="text-sm uppercase tracking-[0.16em] text-pearl/70">{priceDisplayLabel(item)}</p>
 
+              {isReasoningPending(item) ? (
+                <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-champagne/85">
+                  <span className="h-3 w-3 rounded-full border border-champagne/70 border-t-transparent animate-spin" />
+                  Reasoning Through Image
+                </p>
+              ) : null}
+
               {item.canCancel ? (
                 <button
                   type="button"
@@ -210,6 +221,13 @@ export function VaultPage() {
                   <p className="text-sm uppercase tracking-[0.16em] text-pearl/60">
                     {priceDisplayLabel(item)}
                   </p>
+
+                  {isReasoningPending(item) ? (
+                    <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-champagne/80">
+                      <span className="h-3 w-3 rounded-full border border-champagne/70 border-t-transparent animate-spin" />
+                      Reasoning Through Image
+                    </p>
+                  ) : null}
                 </div>
               </article>
             ))}

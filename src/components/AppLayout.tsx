@@ -3,36 +3,75 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { BottomNav } from '@/components/BottomNav';
 import { cn } from '@/lib/utils';
 
+const AQQUIRE_PROCUREMENT_STARTED_EVENT = 'aqquire:procurement-started';
 const AQQUIRE_PROCUREMENT_COMPLETE_EVENT = 'aqquire:procurement-complete';
 const TOAST_SWIPE_DISMISS_PX = 28;
+
+type ProcurementToastState =
+  | {
+      mode: 'progress' | 'complete';
+      message: string;
+    }
+  | null;
 
 export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const isAqquire = location.pathname === '/aqquire';
-  const [procurementToast, setProcurementToast] = useState<string | null>(null);
+  const [procurementToast, setProcurementToast] = useState<ProcurementToastState>(null);
+  const [progressTick, setProgressTick] = useState(0);
   const touchStartY = useRef<number | null>(null);
   const pointerStartY = useRef<number | null>(null);
   const suppressClickUntil = useRef(0);
 
   useEffect(() => {
-    const handleProcurementComplete = (event: Event) => {
-      const custom = event as CustomEvent<{ displayName?: string }>;
-      const name = custom.detail?.displayName?.trim();
-      setProcurementToast(name ? `${name} priced. Tap to open Vault.` : 'Price procured. Tap to open Vault.');
+    const handleProcurementStarted = () => {
+      setProcurementToast({
+        mode: 'progress',
+        message: 'Reasoning through your capture',
+      });
     };
 
+    const handleProcurementComplete = (event: Event) => {
+      const custom = event as CustomEvent<{ displayName?: string; status?: 'success' | 'deferred' }>;
+      if (custom.detail?.status === 'deferred') {
+        setProcurementToast({
+          mode: 'complete',
+          message: 'Still procuring. Check Vault shortly.',
+        });
+        return;
+      }
+
+      const name = custom.detail?.displayName?.trim();
+      setProcurementToast({
+        mode: 'complete',
+        message: name ? `${name} priced. Tap to open Vault.` : 'Price procured. Tap to open Vault.',
+      });
+    };
+
+    window.addEventListener(AQQUIRE_PROCUREMENT_STARTED_EVENT, handleProcurementStarted);
     window.addEventListener(AQQUIRE_PROCUREMENT_COMPLETE_EVENT, handleProcurementComplete);
     return () => {
+      window.removeEventListener(AQQUIRE_PROCUREMENT_STARTED_EVENT, handleProcurementStarted);
       window.removeEventListener(AQQUIRE_PROCUREMENT_COMPLETE_EVENT, handleProcurementComplete);
     };
   }, []);
 
   useEffect(() => {
-    if (!procurementToast) return;
+    if (!procurementToast || procurementToast.mode !== 'complete') return;
     const timeout = window.setTimeout(() => setProcurementToast(null), 10_000);
     return () => window.clearTimeout(timeout);
   }, [procurementToast]);
+
+  useEffect(() => {
+    if (!procurementToast || procurementToast.mode !== 'progress') return;
+    const timer = window.setInterval(() => {
+      setProgressTick((value) => (value + 1) % 4);
+    }, 550);
+    return () => window.clearInterval(timer);
+  }, [procurementToast]);
+
+  const progressDots = '.'.repeat((progressTick % 3) + 1);
 
   return (
     <div className="min-h-dvh bg-luxury text-pearl">
@@ -97,8 +136,12 @@ export function AppLayout() {
           }}
           className="fixed bottom-24 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-champagne/45 bg-obsidian/95 px-4 py-3 text-left shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
         >
-          <p className="text-xs uppercase tracking-[0.16em] text-champagne">Procurement Complete</p>
-          <p className="mt-1 text-sm text-pearl/90">{procurementToast}</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-champagne">
+            {procurementToast.mode === 'progress' ? 'Reasoning' : 'Procurement Complete'}
+          </p>
+          <p className="mt-1 text-sm text-pearl/90">
+            {procurementToast.mode === 'progress' ? `${procurementToast.message}${progressDots}` : procurementToast.message}
+          </p>
           <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-pearl/60">Tap to Vault · Swipe Up to Hide</p>
         </button>
       ) : null}
