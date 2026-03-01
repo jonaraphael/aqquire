@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --color-obsidian: #0f0c14;
+  --color-pearl: #f4eee2;
+  --color-champagne: #d7b06a;
+  --font-display: 'Cormorant Garamond', 'Times New Roman', serif;
+  --font-sans: 'Manrope', 'Helvetica Neue', sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-pearl);
+  background: radial-gradient(circle at 14% 12%, rgba(235, 193, 111, 0.14), transparent 40%),
+    radial-gradient(circle at 88% 72%, rgba(220, 166, 90, 0.14), transparent 45%),
+    linear-gradient(145deg, #0a0910 0%, #130f1e 42%, #0b0a12 100%);
+}
+
+.bg-luxury {
+  background: radial-gradient(circle at 20% 10%, rgba(221, 176, 95, 0.12), transparent 38%),
+    radial-gradient(circle at 85% 80%, rgba(208, 159, 82, 0.1), transparent 45%),
+    linear-gradient(155deg, #0b0a13 0%, #120f1e 46%, #0c0b14 100%);
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.qr-grid {
+  grid-template-columns: repeat(29, minmax(0, 1fr));
+}
