@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { StatusPill } from '@/components/StatusPill';
 import { TrophyCarousel } from '@/components/TrophyCarousel';
@@ -10,6 +11,73 @@ import {
   useTrophyCase,
   useVaultProfile,
 } from '@/lib/localBackend';
+
+const IMAGE_SWIPE_THRESHOLD = 36;
+
+function priceDisplayLabel(item: any) {
+  if (item.status === 'pending' && (!item.priceEstimate || item.priceEstimate <= 0)) {
+    return 'Procuring Price';
+  }
+  return currency(item.priceEstimate, item.currency);
+}
+
+function SwipeableVaultImage({
+  item,
+  className,
+}: {
+  item: any;
+  className: string;
+}) {
+  const touchStartX = useRef<number | null>(null);
+  const pointerStartX = useRef<number | null>(null);
+  const [showCaptured, setShowCaptured] = useState(false);
+
+  const hasCapturedVariant =
+    typeof item.capturedImageUrl === 'string' &&
+    item.capturedImageUrl.length > 0 &&
+    item.capturedImageUrl !== item.heroImageUrl;
+
+  const activeImage = hasCapturedVariant && showCaptured ? item.capturedImageUrl : item.heroImageUrl;
+  const imageLabel = hasCapturedVariant && showCaptured ? 'Captured' : 'Marketing';
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-xl"
+      onTouchStart={(event) => {
+        touchStartX.current = event.changedTouches[0]?.clientX ?? null;
+      }}
+      onTouchEnd={(event) => {
+        if (!hasCapturedVariant || touchStartX.current === null) return;
+        const endX = event.changedTouches[0]?.clientX ?? touchStartX.current;
+        const delta = endX - touchStartX.current;
+        touchStartX.current = null;
+
+        if (Math.abs(delta) >= IMAGE_SWIPE_THRESHOLD) {
+          setShowCaptured((current) => !current);
+        }
+      }}
+      onPointerDown={(event) => {
+        pointerStartX.current = event.clientX;
+      }}
+      onPointerUp={(event) => {
+        if (!hasCapturedVariant || pointerStartX.current === null) return;
+        const delta = event.clientX - pointerStartX.current;
+        pointerStartX.current = null;
+
+        if (Math.abs(delta) >= IMAGE_SWIPE_THRESHOLD) {
+          setShowCaptured((current) => !current);
+        }
+      }}
+    >
+      <img src={activeImage} alt={item.displayName} className={className} loading="lazy" />
+      {hasCapturedVariant ? (
+        <span className="pointer-events-none absolute bottom-2 right-2 rounded-full border border-white/25 bg-black/45 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-pearl/85">
+          {imageLabel}
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 export function VaultPage() {
   const profile = useVaultProfile();
@@ -55,7 +123,7 @@ export function VaultPage() {
             key={item._id}
             className="rounded-2xl border border-white/12 bg-white/[0.04] p-3 shadow-[0_16px_45px_rgba(0,0,0,0.3)]"
           >
-            <img src={item.heroImageUrl} alt={item.displayName} className="h-44 w-full rounded-xl object-cover" loading="lazy" />
+            <SwipeableVaultImage item={item} className="h-44 w-full rounded-xl object-cover" />
 
             <div className="mt-3 space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -76,7 +144,7 @@ export function VaultPage() {
                 )}
               </div>
 
-              <p className="text-sm uppercase tracking-[0.16em] text-pearl/70">{currency(item.priceEstimate, item.currency)}</p>
+              <p className="text-sm uppercase tracking-[0.16em] text-pearl/70">{priceDisplayLabel(item)}</p>
 
               {item.canCancel ? (
                 <button
@@ -132,12 +200,7 @@ export function VaultPage() {
                 key={item._id}
                 className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 opacity-75"
               >
-                <img
-                  src={item.heroImageUrl}
-                  alt={item.displayName}
-                  className="h-44 w-full rounded-xl object-cover saturate-75"
-                  loading="lazy"
-                />
+                <SwipeableVaultImage item={item} className="h-44 w-full rounded-xl object-cover saturate-75" />
 
                 <div className="mt-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
@@ -145,7 +208,7 @@ export function VaultPage() {
                     <StatusPill status={item.status} />
                   </div>
                   <p className="text-sm uppercase tracking-[0.16em] text-pearl/60">
-                    {currency(item.priceEstimate, item.currency)}
+                    {priceDisplayLabel(item)}
                   </p>
                 </div>
               </article>

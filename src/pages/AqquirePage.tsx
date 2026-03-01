@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAnalyzeCapture, useAqquireIt, useViewerContext } from '@/lib/localBackend';
+import {
+  useAnalyzeCapture,
+  useFailCaptureProcuring,
+  useFinalizeCaptureProcuring,
+  useStartCaptureProcuring,
+  useViewerContext,
+} from '@/lib/localBackend';
 import { useDebugMode } from '@/hooks/useDebugMode';
 
 interface CaptureResult {
@@ -61,13 +67,21 @@ function fileToDataUrl(file: File) {
   });
 }
 
+function sleep(milliseconds: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
+}
+
 export function AqquirePage() {
   const navigate = useNavigate();
   const viewerContext = useViewerContext();
   const debugMode = useDebugMode(viewerContext?.user.debugEnabled);
 
   const analyzeCapture = useAnalyzeCapture();
-  const aqquireIt = useAqquireIt();
+  const startCaptureProcuring = useStartCaptureProcuring();
+  const finalizeCaptureProcuring = useFinalizeCaptureProcuring();
+  const failCaptureProcuring = useFailCaptureProcuring();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -131,28 +145,38 @@ export function AqquirePage() {
     setErrorMessage(null);
 
     try {
-      const response = await analyzeCapture({ imageDataUrl });
-      if (!response.ok || !response.result) {
-        throw new Error('Capture analysis failed');
-      }
+      await sleep(1000);
 
-      const result = response.result as CaptureResult;
-
-      await aqquireIt({
-        displayName: result.displayName,
-        heroImageUrl: result.heroImageUrl,
-        capturedImageUrl: result.capturedImageUrl,
-        category: result.category,
-        priceEstimate: result.priceEstimate,
-        currency: result.currency,
-        supplierName: result.supplierName,
-        supplierUrl: result.supplierUrl,
-        uniqueFlag: result.uniqueFlag,
-        confidence: result.confidence,
-        debugPriceBreakdown: result.debugPriceBreakdown,
-      });
-
+      const pending = await startCaptureProcuring({ capturedImageUrl: imageDataUrl });
       void navigate('/vault');
+
+      void (async () => {
+        try {
+          const response = await analyzeCapture({ imageDataUrl });
+          if (!response.ok || !response.result) {
+            throw new Error('Capture analysis failed');
+          }
+
+          const result = response.result as CaptureResult;
+
+          await finalizeCaptureProcuring({
+            vaultItemId: pending.vaultItemId,
+            displayName: result.displayName,
+            heroImageUrl: result.heroImageUrl,
+            capturedImageUrl: result.capturedImageUrl,
+            category: result.category,
+            priceEstimate: result.priceEstimate,
+            currency: result.currency,
+            supplierName: result.supplierName,
+            supplierUrl: result.supplierUrl,
+            uniqueFlag: result.uniqueFlag,
+            confidence: result.confidence,
+            debugPriceBreakdown: result.debugPriceBreakdown,
+          });
+        } catch {
+          await failCaptureProcuring({ vaultItemId: pending.vaultItemId });
+        }
+      })();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Capture failed. Try again.';
       setErrorMessage(message);
@@ -161,7 +185,7 @@ export function AqquirePage() {
       setIsCapturing(false);
       captureLockRef.current = false;
     }
-  }, [analyzeCapture, aqquireIt, navigate]);
+  }, [analyzeCapture, failCaptureProcuring, finalizeCaptureProcuring, navigate, startCaptureProcuring]);
 
   const snapLiveFrame = useCallback(async () => {
     if (!videoRef.current || videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
@@ -272,7 +296,7 @@ export function AqquirePage() {
       {isCapturing ? (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/65">
           <div className="rounded-full border border-champagne/45 bg-champagne/10 px-4 py-2 text-xs uppercase tracking-[0.18em] text-champagne">
-            Procuring
+            Capturing
           </div>
         </div>
       ) : null}

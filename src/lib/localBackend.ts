@@ -1009,6 +1009,7 @@ interface VaultListItem {
   status: VaultStatus;
   displayName: string;
   heroImageUrl: string;
+  capturedImageUrl?: string;
   priceEstimate: number;
   currency: string;
   category: Category;
@@ -1035,6 +1036,7 @@ function listVaultInDatabase(db: Database, identity: Identity, debug: boolean | 
       status: item.status,
       displayName: item.displayName,
       heroImageUrl: item.heroImageUrl,
+      capturedImageUrl: item.capturedImageUrl,
       priceEstimate: item.priceEstimate,
       currency: item.currency,
       category: item.category,
@@ -1412,6 +1414,10 @@ export interface CaptureResult {
   debugPriceBreakdown?: PriceBreakdown;
 }
 
+interface StartCaptureProcuringArgs {
+  capturedImageUrl: string;
+}
+
 interface AqquireItArgs {
   displayName: string;
   heroImageUrl: string;
@@ -1424,6 +1430,128 @@ interface AqquireItArgs {
   uniqueFlag: boolean;
   confidence?: number;
   debugPriceBreakdown?: PriceBreakdown;
+}
+
+interface FinalizeCaptureProcuringArgs extends AqquireItArgs {
+  vaultItemId: string;
+}
+
+function startCaptureProcuringInDatabase(db: Database, identity: Identity, args: StartCaptureProcuringArgs) {
+  const viewer = requireViewer(db, identity);
+  const createdAt = Date.now();
+  const vaultItemId = createId(db, 'vlt');
+
+  db.vaultItems.push({
+    id: vaultItemId,
+    userId: viewer.id,
+    status: 'pending',
+    displayName: 'Captured Item',
+    heroImageUrl: args.capturedImageUrl,
+    capturedImageFileId: undefined,
+    capturedImageUrl: args.capturedImageUrl,
+    category: 'Other',
+    priceEstimate: 0,
+    currency: 'USD',
+    supplierName: undefined,
+    supplierUrl: undefined,
+    sourceFeedItemId: undefined,
+    confidence: undefined,
+    uniqueFlag: false,
+    shippingAddressId: viewer.defaultShippingAddressId,
+    paymentMethodId: viewer.defaultPaymentMethodId,
+    debugPriceBreakdown: undefined,
+    createdAt,
+    updatedAt: createdAt,
+  });
+
+  return {
+    vaultItemId,
+    created: true,
+  };
+}
+
+function finalizeCaptureProcuringInDatabase(db: Database, identity: Identity, args: FinalizeCaptureProcuringArgs) {
+  const viewer = requireViewer(db, identity);
+  const item = db.vaultItems.find((entry) => entry.id === args.vaultItemId && entry.userId === viewer.id);
+
+  if (!item) {
+    throw new Error('Vault item not found');
+  }
+
+  if (item.status !== 'pending') {
+    return {
+      updated: false,
+      reason: 'not_pending',
+    };
+  }
+
+  item.displayName = args.displayName;
+  item.heroImageUrl = args.heroImageUrl;
+  item.capturedImageUrl = args.capturedImageUrl || item.capturedImageUrl;
+  item.category = args.category;
+  item.priceEstimate = args.priceEstimate;
+  item.currency = args.currency;
+  item.supplierName = args.supplierName;
+  item.supplierUrl = args.supplierUrl;
+  item.confidence = args.confidence;
+  item.uniqueFlag = args.uniqueFlag;
+  item.debugPriceBreakdown = args.debugPriceBreakdown;
+  item.updatedAt = Date.now();
+
+  if (args.priceEstimate >= MIN_FEED_PRICE) {
+    const existingFeed = db.feedItems.find((feedItem) => feedItem.sourceVaultItemId === item.id);
+
+    if (!existingFeed) {
+      db.feedItems.push({
+        id: createId(db, 'feed'),
+        displayName: args.displayName,
+        heroImageUrl: args.heroImageUrl,
+        category: args.category,
+        price: args.priceEstimate,
+        currency: args.currency,
+        primaryUserId: viewer.id,
+        primaryUserHandleSnapshot: viewer.displayHandle,
+        primaryUserAvatarUrl: viewer.avatarUrl,
+        associatedCount: 1,
+        createdAt: item.createdAt,
+        freshnessScore: Date.now(),
+        sourceVaultItemId: item.id,
+        minPriceGateEnforced: true,
+        brand: undefined,
+        supplierName: args.supplierName,
+        supplierUrl: args.supplierUrl,
+        uniqueFlag: args.uniqueFlag,
+      });
+    }
+  }
+
+  return {
+    updated: true,
+    vaultItemId: item.id,
+  };
+}
+
+function failCaptureProcuringInDatabase(db: Database, identity: Identity, args: { vaultItemId: string }) {
+  const viewer = requireViewer(db, identity);
+  const item = db.vaultItems.find((entry) => entry.id === args.vaultItemId && entry.userId === viewer.id);
+
+  if (!item) {
+    throw new Error('Vault item not found');
+  }
+
+  if (item.status !== 'pending') {
+    return {
+      failed: false,
+      reason: 'not_pending',
+    };
+  }
+
+  item.status = 'failed';
+  item.updatedAt = Date.now();
+
+  return {
+    failed: true,
+  };
 }
 
 function aqquireItInDatabase(db: Database, identity: Identity, args: AqquireItArgs) {
@@ -1735,6 +1863,51 @@ export function useRotateFollowToken() {
 
     return mutateDatabase((db) => rotateFollowTokenInDatabase(db, identity));
   }, [identity]);
+}
+
+export function useStartCaptureProcuring() {
+  const identity = useIdentity();
+
+  return useCallback(
+    async (args: StartCaptureProcuringArgs) => {
+      if (!identity) {
+        throw new Error('Not authenticated');
+      }
+
+      return mutateDatabase((db) => startCaptureProcuringInDatabase(db, identity, args));
+    },
+    [identity],
+  );
+}
+
+export function useFinalizeCaptureProcuring() {
+  const identity = useIdentity();
+
+  return useCallback(
+    async (args: FinalizeCaptureProcuringArgs) => {
+      if (!identity) {
+        throw new Error('Not authenticated');
+      }
+
+      return mutateDatabase((db) => finalizeCaptureProcuringInDatabase(db, identity, args));
+    },
+    [identity],
+  );
+}
+
+export function useFailCaptureProcuring() {
+  const identity = useIdentity();
+
+  return useCallback(
+    async (args: { vaultItemId: string }) => {
+      if (!identity) {
+        throw new Error('Not authenticated');
+      }
+
+      return mutateDatabase((db) => failCaptureProcuringInDatabase(db, identity, args));
+    },
+    [identity],
+  );
 }
 
 export function useAnalyzeCapture() {
