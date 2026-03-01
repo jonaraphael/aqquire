@@ -34,7 +34,7 @@ Optional env vars:
 - `VITE_DEMO_MODE=1` (bypass WorkOS auth and run with a local demo user)
 - `VITE_ROUTER_MODE=hash` (recommended for static hosting)
 - `VITE_BASE_PATH=/repo-name/` (for project-site deploys)
-- `VITE_OPENAI_API_KEY` (required for AQQUIRE image target identification + online lookup)
+- `VITE_OPENAI_API_KEY` or `OPENAI_API_KEY` (required for AQQUIRE image target identification + online lookup)
 - `VITE_OPENAI_VISION_MODEL` (default `gpt-5.2`)
 - `VITE_OPENAI_SEARCH_MODEL` (default `gpt-5.2`)
 
@@ -67,6 +67,7 @@ To enable it:
 1. Push to `main` or `master` (or run the workflow manually).
 2. In GitHub repo settings, set **Pages** source to **GitHub Actions**.
 3. The workflow will publish and expose the Pages URL in the deploy job output.
+4. For GPT lookup in Pages, add repo secret `VITE_OPENAI_API_KEY` (or `OPENAI_API_KEY`).
 
 ## Data model behavior
 

@@ -45,6 +45,8 @@ jobs:
           echo "VITE_ROUTER_MODE=hash" >> "$GITHUB_ENV"
 
       - name: Build
+        env:
+          VITE_OPENAI_API_KEY: ${{ secrets.VITE_OPENAI_API_KEY || secrets.OPENAI_API_KEY }}
         run: npm run build
 
       - name: Upload Artifact
@@ -62,4 +64,3 @@ jobs:
       - name: Deploy To GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-

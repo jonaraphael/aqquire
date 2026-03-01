@@ -48,6 +48,10 @@ interface ResponsesPayload {
   }>;
 }
 
+function getOpenAiApiKey() {
+  return import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.OPENAI_API_KEY;
+}
+
 function normalizeCategory(input: string | undefined): Category {
   if (!input) return 'Other';
   const matched = CATEGORY_OPTIONS.find((entry) => entry.toLowerCase() === input.trim().toLowerCase());
@@ -109,9 +113,11 @@ function responseText(payload: ResponsesPayload): string {
 }
 
 async function callResponsesApi(body: Record<string, unknown>): Promise<ResponsesPayload> {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  const apiKey = getOpenAiApiKey();
   if (!apiKey) {
-    throw new Error('VITE_OPENAI_API_KEY is not configured');
+    throw new Error(
+      'OpenAI key missing. Set VITE_OPENAI_API_KEY (or OPENAI_API_KEY), then restart the dev server.',
+    );
   }
 
   const response = await fetch('https://api.openai.com/v1/responses', {

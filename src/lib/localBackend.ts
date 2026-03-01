@@ -1585,10 +1585,6 @@ export function useRotateFollowToken() {
 
 export function useAnalyzeCapture() {
   return useCallback(async (args: { imageDataUrl: string }) => {
-    if (!import.meta.env.VITE_OPENAI_API_KEY) {
-      throw new Error('VITE_OPENAI_API_KEY is required for AQQUIRE capture lookup');
-    }
-
     const result = await analyzeWithOpenAi(args.imageDataUrl);
     return {
       ok: true,
