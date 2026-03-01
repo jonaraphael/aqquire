@@ -8,6 +8,7 @@ import {
   useCommitFeedItemToVault,
   useFollowByToken,
   useListFeed,
+  useResolveFeedCategoryHide,
   useViewerContext,
 } from '@/lib/localBackend';
 
@@ -17,6 +18,7 @@ export function FeedPage() {
 
   const commitFeed = useCommitFeedItemToVault();
   const followByToken = useFollowByToken();
+  const resolveFeedCategoryHide = useResolveFeedCategoryHide();
 
   const [enabledCategories, setEnabledCategories] = useState<string[]>([...CATEGORY_OPTIONS]);
   const [followOpen, setFollowOpen] = useState(false);
@@ -225,9 +227,44 @@ export function FeedPage() {
             key={item._id}
             item={item}
             debugMode={debugMode}
-            onCommit={async (itemId, interaction) => {
-              await commitFeed({ feedItemId: itemId, interaction });
-              showToast('In Vault');
+            onSwipe={async (itemId, direction) => {
+              try {
+                if (direction === 'right') {
+                  const response = await commitFeed({ feedItemId: itemId, interaction: 'swipe_right' });
+
+                  if (response.created) {
+                    showToast('In Vault');
+                  } else if (response.reason === 'duplicate' || response.reason === 'existing_pending') {
+                    showToast('Already in Vault');
+                  } else {
+                    showToast('In Vault');
+                  }
+
+                  return 'acquired';
+                }
+
+                const response = await commitFeed({ feedItemId: itemId, interaction: 'swipe_left' });
+                showToast('Removed from Feed');
+
+                if (response.hidePromptMilestone && response.category) {
+                  const shouldHide = window.confirm(
+                    `You removed ${response.dismissedCategoryCount} ${response.category} items. Hide all ${response.category} items from your feed?`,
+                  );
+
+                  await resolveFeedCategoryHide({
+                    category: response.category,
+                    hideAll: shouldHide,
+                    milestone: response.hidePromptMilestone,
+                  });
+
+                  showToast(shouldHide ? `Hiding ${response.category}` : `Keeping ${response.category}`);
+                }
+
+                return 'dismissed';
+              } catch {
+                showToast('Action failed');
+                return 'none';
+              }
             }}
           />
         ))}

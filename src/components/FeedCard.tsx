@@ -23,7 +23,7 @@ export interface FeedCardItem {
 interface FeedCardProps {
   item: FeedCardItem;
   debugMode: boolean;
-  onCommit: (itemId: string, interaction: 'swipe') => Promise<void>;
+  onSwipe: (itemId: string, direction: 'left' | 'right') => Promise<'acquired' | 'dismissed' | 'none'>;
 }
 
 const SWIPE_THRESHOLD = 0.3;
@@ -42,7 +42,7 @@ function vibrate() {
   }
 }
 
-export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
+export function FeedCard({ item, debugMode, onSwipe }: FeedCardProps) {
   const rowRef = useRef<HTMLDivElement | null>(null);
   const committedRef = useRef(false);
 
@@ -54,16 +54,25 @@ export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
 
   const fillRatio = hasCommitted ? 1 : progress;
 
-  const fireCommit = async () => {
+  const fireSwipe = async (direction: 'left' | 'right') => {
     if (committedRef.current) return;
     committedRef.current = true;
 
-    setHasCommitted(true);
-    setPendingIndicator(true);
     setProgress(1);
     vibrate();
 
-    await onCommit(item._id, 'swipe');
+    const result = await onSwipe(item._id, direction);
+
+    if (result === 'acquired') {
+      setHasCommitted(true);
+      setPendingIndicator(true);
+      return;
+    }
+
+    if (result === 'none') {
+      committedRef.current = false;
+      setProgress(0);
+    }
   };
 
   return (
@@ -99,7 +108,7 @@ export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
         const width = rowRef.current?.clientWidth ?? 1;
         const dragRatio = Math.min(1, Math.abs(info.offset.x) / width);
         if (dragRatio >= SWIPE_THRESHOLD) {
-          void fireCommit();
+          void fireSwipe(swipeDirection);
         } else {
           setProgress(0);
         }
@@ -110,7 +119,7 @@ export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
           className={cn(
             'absolute inset-y-0 h-full',
             swipeDirection === 'left'
-              ? 'right-0 bg-gradient-to-l from-[#f7deac26] via-[#f0cb8652] to-[#b5833955]'
+              ? 'right-0 bg-gradient-to-l from-[#fdd0d02e] via-[#f1707050] to-[#ae252560]'
               : 'left-0 bg-gradient-to-r from-[#f7deac26] via-[#f0cb8652] to-[#b5833955]',
           )}
           style={{
@@ -162,14 +171,6 @@ export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
               className="h-5 w-5 rounded-full object-cover"
             />
             <span>{item.whoHandle}</span>
-            <span
-              className={cn(
-                'rounded-full border px-2 py-0.5 tracking-[0.16em] transition-colors',
-                hasCommitted ? 'border-champagne/65 bg-champagne/20 text-champagne' : 'border-champagne/45 text-champagne',
-              )}
-            >
-              AQQUIRE
-            </span>
             {item.associatedCount > 1 ? <span>+{item.associatedCount - 1}</span> : null}
           </div>
 

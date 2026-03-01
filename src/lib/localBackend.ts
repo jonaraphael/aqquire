@@ -11,6 +11,7 @@ type Category = (typeof CATEGORY_OPTIONS)[number];
 type VaultStatus = (typeof VAULT_STATUSES)[number];
 type PaymentType = 'card' | 'bank';
 type TrophyProgressType = 'count' | 'percentile' | 'binary';
+type CategoryHidePromptStage = 'declined_first' | 'declined_second';
 
 interface Identity {
   tokenIdentifier: string;
@@ -39,6 +40,10 @@ interface UserRecord {
   tier: string;
   debugEnabled: boolean;
   followToken: string;
+  dismissedFeedItemIds?: string[];
+  hiddenFeedCategories?: Category[];
+  dismissedCategoryCounts?: Partial<Record<Category, number>>;
+  categoryHidePromptStage?: Partial<Record<Category, CategoryHidePromptStage>>;
 }
 
 interface PaymentMethodRecord {
@@ -535,6 +540,18 @@ function requireViewer(db: Database, identity: Identity): UserRecord {
   if (!viewer) {
     throw new Error('User not initialized');
   }
+  if (!Array.isArray(viewer.dismissedFeedItemIds)) {
+    viewer.dismissedFeedItemIds = [];
+  }
+  if (!Array.isArray(viewer.hiddenFeedCategories)) {
+    viewer.hiddenFeedCategories = [];
+  }
+  if (!viewer.dismissedCategoryCounts || typeof viewer.dismissedCategoryCounts !== 'object') {
+    viewer.dismissedCategoryCounts = {};
+  }
+  if (!viewer.categoryHidePromptStage || typeof viewer.categoryHidePromptStage !== 'object') {
+    viewer.categoryHidePromptStage = {};
+  }
   return viewer;
 }
 
@@ -561,6 +578,10 @@ function ensureViewerInDatabase(db: Database, identity: Identity) {
     tier: percentileToTier(initialPercentile),
     debugEnabled: false,
     followToken: newFollowToken(),
+    dismissedFeedItemIds: [],
+    hiddenFeedCategories: [],
+    dismissedCategoryCounts: {},
+    categoryHidePromptStage: {},
   });
 
   return userId;
@@ -665,6 +686,7 @@ export interface FeedListResult {
   items: FeedListItem[];
   nextCursor: number | null;
   hasMore: boolean;
+  hiddenCategories: Category[];
 }
 
 interface FeedQueryArgs {
@@ -680,7 +702,15 @@ function listFeedInDatabase(db: Database, identity: Identity, args: FeedQueryArg
 
   const all = [...db.feedItems].sort((a, b) => b.freshnessScore - a.freshnessScore);
   const allowed = new Set(args.categories);
-  const filtered = all.filter((item) => item.price >= MIN_FEED_PRICE && allowed.has(item.category));
+  const dismissed = new Set(viewer.dismissedFeedItemIds ?? []);
+  const hiddenCategories = new Set(viewer.hiddenFeedCategories ?? []);
+  const filtered = all.filter(
+    (item) =>
+      item.price >= MIN_FEED_PRICE &&
+      allowed.has(item.category) &&
+      !dismissed.has(item.id) &&
+      !hiddenCategories.has(item.category),
+  );
 
   const limit = Math.max(1, Math.min(args.limit ?? 12, 24));
   const cursor = Math.max(0, args.cursor ?? 0);
@@ -708,12 +738,24 @@ function listFeedInDatabase(db: Database, identity: Identity, args: FeedQueryArg
     })),
     nextCursor: cursor + limit < filtered.length ? cursor + limit : null,
     hasMore: cursor + limit < filtered.length,
+    hiddenCategories: [...hiddenCategories],
   };
 }
 
 interface CommitFeedArgs {
   feedItemId: string;
-  interaction: 'swipe';
+  interaction: 'swipe_right' | 'swipe_left';
+}
+
+export interface CommitFeedResult {
+  created: boolean;
+  removed?: boolean;
+  reason?: string;
+  interaction?: 'swipe_right' | 'swipe_left';
+  vaultItemId?: string;
+  category?: Category;
+  dismissedCategoryCount?: number;
+  hidePromptMilestone?: 'first' | 'second';
 }
 
 interface VaultDuplicateKey {
@@ -745,7 +787,7 @@ function findDuplicateVaultItem(db: Database, userId: string, key: VaultDuplicat
   });
 }
 
-function commitFeedItemToVaultInDatabase(db: Database, identity: Identity, args: CommitFeedArgs) {
+function commitFeedItemToVaultInDatabase(db: Database, identity: Identity, args: CommitFeedArgs): CommitFeedResult {
   const viewer = requireViewer(db, identity);
   const feedItem = db.feedItems.find((item) => item.id === args.feedItemId);
 
@@ -754,6 +796,48 @@ function commitFeedItemToVaultInDatabase(db: Database, identity: Identity, args:
   }
   if (feedItem.price < MIN_FEED_PRICE) {
     throw new Error('Feed price gate violation');
+  }
+
+  if (args.interaction === 'swipe_left') {
+    const dismissedFeedItemIds = viewer.dismissedFeedItemIds ?? (viewer.dismissedFeedItemIds = []);
+    if (dismissedFeedItemIds.includes(feedItem.id)) {
+      return {
+        created: false,
+        removed: false,
+        reason: 'already_dismissed',
+      };
+    }
+
+    dismissedFeedItemIds.push(feedItem.id);
+
+    const dismissedCategoryCounts = viewer.dismissedCategoryCounts ?? (viewer.dismissedCategoryCounts = {});
+    const categoryHidePromptStage = viewer.categoryHidePromptStage ?? (viewer.categoryHidePromptStage = {});
+    const hiddenFeedCategories = viewer.hiddenFeedCategories ?? (viewer.hiddenFeedCategories = []);
+
+    const category = feedItem.category;
+    const countForCategory = (dismissedCategoryCounts[category] ?? 0) + 1;
+    dismissedCategoryCounts[category] = countForCategory;
+
+    let hidePromptMilestone: 'first' | 'second' | undefined;
+    const promptStage = categoryHidePromptStage[category];
+    const categoryHidden = hiddenFeedCategories.includes(category);
+
+    if (!categoryHidden) {
+      if (!promptStage && countForCategory > 3) {
+        hidePromptMilestone = 'first';
+      } else if (promptStage === 'declined_first' && countForCategory >= 30) {
+        hidePromptMilestone = 'second';
+      }
+    }
+
+    return {
+      created: false,
+      removed: true,
+      reason: 'dismissed',
+      category,
+      dismissedCategoryCount: countForCategory,
+      hidePromptMilestone,
+    };
   }
 
   const now = Date.now();
@@ -846,6 +930,36 @@ function commitFeedItemToVaultInDatabase(db: Database, identity: Identity, args:
     created: true,
     interaction: args.interaction,
     vaultItemId,
+  };
+}
+
+interface ResolveFeedCategoryHideArgs {
+  category: Category;
+  hideAll: boolean;
+  milestone: 'first' | 'second';
+}
+
+function resolveFeedCategoryHideInDatabase(db: Database, identity: Identity, args: ResolveFeedCategoryHideArgs) {
+  const viewer = requireViewer(db, identity);
+  const hiddenFeedCategories = viewer.hiddenFeedCategories ?? (viewer.hiddenFeedCategories = []);
+  const categoryHidePromptStage = viewer.categoryHidePromptStage ?? (viewer.categoryHidePromptStage = {});
+
+  if (args.hideAll) {
+    if (!hiddenFeedCategories.includes(args.category)) {
+      hiddenFeedCategories.push(args.category);
+    }
+    delete categoryHidePromptStage[args.category];
+    return {
+      hidden: true,
+      category: args.category,
+    };
+  }
+
+  categoryHidePromptStage[args.category] = args.milestone === 'first' ? 'declined_first' : 'declined_second';
+
+  return {
+    hidden: false,
+    category: args.category,
   };
 }
 
@@ -1485,6 +1599,21 @@ export function useCommitFeedItemToVault() {
       }
 
       return mutateDatabase((db) => commitFeedItemToVaultInDatabase(db, identity, args));
+    },
+    [identity],
+  );
+}
+
+export function useResolveFeedCategoryHide() {
+  const identity = useIdentity();
+
+  return useCallback(
+    async (args: ResolveFeedCategoryHideArgs) => {
+      if (!identity) {
+        throw new Error('Not authenticated');
+      }
+
+      return mutateDatabase((db) => resolveFeedCategoryHideInDatabase(db, identity, args));
     },
     [identity],
   );

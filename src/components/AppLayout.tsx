@@ -14,9 +14,6 @@ export function AppLayout() {
             <p className="font-display text-2xl tracking-[0.22em] text-champagne">AQQUIRE</p>
             <p className="text-[10px] uppercase tracking-[0.28em] text-pearl/55">Want it. Get it.</p>
           </div>
-          <span className="rounded-full border border-champagne/25 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-champagne/80">
-            Luxury Runtime
-          </span>
         </header>
 
         <main className={cn('flex-1', isAqquire ? 'overflow-hidden' : '')}>
