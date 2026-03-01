@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import jsQR from 'jsqr';
 import { CATEGORY_OPTIONS } from '@/lib/constants';
 import { FeedCard } from '@/components/FeedCard';
 import { cn, parseFollowToken } from '@/lib/utils';
@@ -25,6 +26,7 @@ export function FeedPage() {
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -37,9 +39,8 @@ export function FeedPage() {
 
   const items = feedData?.items ?? [];
   const visibleItems = items.slice(0, visibleCount);
-  const scannerUnavailable =
-    typeof window !== 'undefined' && (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia);
-  const scannerMessage = cameraError ?? (followOpen && scannerUnavailable ? 'Scanner unavailable. Paste follow token instead.' : null);
+  const canUseCamera = typeof window !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+  const scannerMessage = cameraError ?? (followOpen && !canUseCamera ? 'Camera unavailable. Paste follow token instead.' : null);
 
   useEffect(() => {
     if (!sentinelRef.current) return;
@@ -61,12 +62,12 @@ export function FeedPage() {
   useEffect(() => {
     if (!followOpen || !videoRef.current) return;
 
-    if (scannerUnavailable) {
+    if (!canUseCamera) {
       return;
     }
 
     let active = true;
-    const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+    const detector = 'BarcodeDetector' in window ? new window.BarcodeDetector({ formats: ['qr_code'] }) : null;
 
     const run = async () => {
       try {
@@ -81,14 +82,37 @@ export function FeedPage() {
         streamRef.current = stream;
         videoRef.current!.srcObject = stream;
         await videoRef.current!.play();
+        setCameraError(null);
 
         const scanLoop = async () => {
           if (!active || !videoRef.current) return;
+
           try {
-            const barcodes = await detector.detect(videoRef.current);
-            const first = barcodes[0]?.rawValue;
-            if (first) {
-              const token = parseFollowToken(first);
+            let raw = '';
+
+            if (detector) {
+              const barcodes = await detector.detect(videoRef.current);
+              raw = barcodes[0]?.rawValue ?? '';
+            }
+
+            if (!raw && canvasRef.current && videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0) {
+              const canvas = canvasRef.current;
+              canvas.width = videoRef.current.videoWidth;
+              canvas.height = videoRef.current.videoHeight;
+
+              const context = canvas.getContext('2d', { willReadFrequently: true });
+              if (context) {
+                context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                const decoded = jsQR(imageData.data, imageData.width, imageData.height, {
+                  inversionAttempts: 'attemptBoth',
+                });
+                raw = decoded?.data ?? '';
+              }
+            }
+
+            if (raw) {
+              const token = parseFollowToken(raw);
               if (token) {
                 setFollowInput(token);
               }
@@ -114,7 +138,7 @@ export function FeedPage() {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     };
-  }, [followOpen, scannerUnavailable]);
+  }, [followOpen, canUseCamera]);
 
   const toggleCategory = (category: (typeof CATEGORY_OPTIONS)[number]) => {
     setVisibleCount(8);
@@ -233,6 +257,7 @@ export function FeedPage() {
             </div>
 
             <video ref={videoRef} muted playsInline className="mb-3 aspect-square w-full rounded-2xl bg-black/60 object-cover" />
+            <canvas ref={canvasRef} className="hidden" />
 
             {scannerMessage ? <p className="mb-2 text-xs text-pearl/60">{scannerMessage}</p> : null}
 

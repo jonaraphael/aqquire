@@ -49,6 +49,7 @@ export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
   const [progress, setProgress] = useState(0);
   const [hasCommitted, setHasCommitted] = useState(false);
   const [pendingIndicator, setPendingIndicator] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const fillRatio = hasCommitted ? 1 : progress;
 
@@ -69,7 +70,7 @@ export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
       ref={rowRef}
       drag={hasCommitted ? false : 'x'}
       dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.14}
+      dragElastic={0}
       dragMomentum={false}
       className={cn(
         'relative overflow-hidden rounded-2xl border p-3 backdrop-blur-sm transition-colors duration-500',
@@ -83,8 +84,13 @@ export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
         const dragRatio = Math.min(1, Math.abs(info.offset.x) / width);
         setProgress(dragRatio);
       }}
+      onDragStart={() => {
+        if (hasCommitted) return;
+        setIsDragging(true);
+      }}
       onDragEnd={(_event, info) => {
         if (hasCommitted) return;
+        setIsDragging(false);
         const width = rowRef.current?.clientWidth ?? 1;
         const dragRatio = Math.min(1, Math.abs(info.offset.x) / width);
         if (dragRatio >= SWIPE_THRESHOLD) {
@@ -96,8 +102,11 @@ export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-[#f7deac26] via-[#f0cb8652] to-[#b5833955] transition-[width] duration-120 ease-out"
-          style={{ width: `${fillRatio * 100}%` }}
+          className="h-full bg-gradient-to-r from-[#f7deac26] via-[#f0cb8652] to-[#b5833955]"
+          style={{
+            width: `${fillRatio * 100}%`,
+            transition: hasCommitted ? 'width 220ms ease-out' : isDragging ? 'none' : 'width 120ms ease-out',
+          }}
         />
       </div>
 

@@ -713,7 +713,36 @@ function listFeedInDatabase(db: Database, identity: Identity, args: FeedQueryArg
 
 interface CommitFeedArgs {
   feedItemId: string;
-  interaction: 'swipe' | 'longPress';
+  interaction: 'swipe';
+}
+
+interface VaultDuplicateKey {
+  sourceFeedItemId?: string;
+  displayName: string;
+  category: Category;
+  priceEstimate: number;
+  currency: string;
+}
+
+function normalizeLabel(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function findDuplicateVaultItem(db: Database, userId: string, key: VaultDuplicateKey) {
+  return db.vaultItems.find((item) => {
+    if (item.userId !== userId) return false;
+
+    if (key.sourceFeedItemId && item.sourceFeedItemId === key.sourceFeedItemId) {
+      return true;
+    }
+
+    return (
+      normalizeLabel(item.displayName) === normalizeLabel(key.displayName) &&
+      item.category === key.category &&
+      Math.round(item.priceEstimate) === Math.round(key.priceEstimate) &&
+      item.currency.toUpperCase() === key.currency.toUpperCase()
+    );
+  });
 }
 
 function commitFeedItemToVaultInDatabase(db: Database, identity: Identity, args: CommitFeedArgs) {
@@ -763,6 +792,22 @@ function commitFeedItemToVaultInDatabase(db: Database, identity: Identity, args:
     };
   }
 
+  const duplicate = findDuplicateVaultItem(db, viewer.id, {
+    sourceFeedItemId: feedItem.id,
+    displayName: feedItem.displayName,
+    category: feedItem.category,
+    priceEstimate: feedItem.price,
+    currency: feedItem.currency,
+  });
+
+  if (duplicate) {
+    return {
+      created: false,
+      reason: 'duplicate',
+      vaultItemId: duplicate.id,
+    };
+  }
+
   const vaultItemId = createId(db, 'vlt');
 
   db.vaultItems.push({
@@ -796,7 +841,6 @@ function commitFeedItemToVaultInDatabase(db: Database, identity: Identity, args:
   feedItem.primaryUserHandleSnapshot = viewer.displayHandle;
   feedItem.primaryUserAvatarUrl = viewer.avatarUrl;
   feedItem.associatedCount = Math.max(feedItem.associatedCount, 0) + 1;
-  feedItem.freshnessScore = now;
 
   return {
     created: true,
@@ -1259,6 +1303,21 @@ function aqquireItInDatabase(db: Database, identity: Identity, args: AqquireItAr
   const viewer = requireViewer(db, identity);
   const createdAt = Date.now();
 
+  const duplicate = findDuplicateVaultItem(db, viewer.id, {
+    displayName: args.displayName,
+    category: args.category,
+    priceEstimate: args.priceEstimate,
+    currency: args.currency,
+  });
+
+  if (duplicate) {
+    return {
+      vaultItemId: duplicate.id,
+      toast: 'Already in Vault',
+      created: false,
+    };
+  }
+
   const vaultItemId = createId(db, 'vlt');
   db.vaultItems.push({
     id: vaultItemId,
@@ -1309,6 +1368,7 @@ function aqquireItInDatabase(db: Database, identity: Identity, args: AqquireItAr
   return {
     vaultItemId,
     toast: 'In Vault',
+    created: true,
   };
 }
 

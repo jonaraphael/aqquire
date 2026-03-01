@@ -16,6 +16,8 @@ export function VaultPage() {
 
   const vaultItems = useListVault({ debug: debugMode });
   const trophies = useTrophyCase({ debug: debugMode });
+  const activeItems = (vaultItems ?? []).filter((item: any) => item.status !== 'canceled');
+  const canceledItems = (vaultItems ?? []).filter((item: any) => item.status === 'canceled');
 
   const cancelPending = useCancelPendingVaultItem();
 
@@ -46,7 +48,7 @@ export function VaultPage() {
       ) : null}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {(vaultItems ?? []).map((item: any) => (
+        {activeItems.map((item: any) => (
           <article
             key={item._id}
             className="rounded-2xl border border-white/12 bg-white/[0.04] p-3 shadow-[0_16px_45px_rgba(0,0,0,0.3)]"
@@ -85,10 +87,45 @@ export function VaultPage() {
         ))}
       </div>
 
-      {(vaultItems ?? []).length === 0 ? (
+      {activeItems.length === 0 && canceledItems.length === 0 ? (
         <div className="rounded-2xl border border-white/15 bg-white/5 p-6 text-sm text-pearl/65">
           Your Vault is empty. Use AQQUIRE to place your first item.
         </div>
+      ) : null}
+
+      {canceledItems.length > 0 ? (
+        <section className="space-y-3 pt-2">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-2xl tracking-[0.12em] text-pearl/80">Canceled</h2>
+            <p className="text-xs uppercase tracking-[0.16em] text-pearl/50">Bottom archive</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {canceledItems.map((item: any) => (
+              <article
+                key={item._id}
+                className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 opacity-75"
+              >
+                <img
+                  src={item.heroImageUrl}
+                  alt={item.displayName}
+                  className="h-44 w-full rounded-xl object-cover saturate-75"
+                  loading="lazy"
+                />
+
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate font-display text-xl text-pearl/85">{item.displayName}</p>
+                    <StatusPill status={item.status} />
+                  </div>
+                  <p className="text-sm uppercase tracking-[0.16em] text-pearl/60">
+                    {currency(item.priceEstimate, item.currency)}
+                  </p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
       ) : null}
     </section>
   );
