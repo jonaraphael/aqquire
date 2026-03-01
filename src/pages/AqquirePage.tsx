@@ -47,6 +47,7 @@ interface CaptureResult {
 
 const AQQUIRE_CAPTURE_EVENT = 'aqquire:capture';
 const AQQUIRE_PROCUREMENT_COMPLETE_EVENT = 'aqquire:procurement-complete';
+const STORAGE_CAPTURE_TARGET_LENGTH = 180_000;
 const CAMERA_SPARKLES = [
   { left: '14%', top: '18%', delay: '0.2s', duration: '4.6s' },
   { left: '82%', top: '24%', delay: '1.4s', duration: '5.2s' },
@@ -73,6 +74,69 @@ function sleep(milliseconds: number) {
   return new Promise<void>((resolve) => {
     window.setTimeout(resolve, milliseconds);
   });
+}
+
+function loadImage(dataUrl: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Unable to decode captured image.'));
+    image.src = dataUrl;
+  });
+}
+
+async function optimizeDataUrlForStorage(dataUrl: string): Promise<string> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return dataUrl;
+  }
+
+  if (!dataUrl.startsWith('data:image/')) {
+    return dataUrl;
+  }
+
+  if (dataUrl.length <= STORAGE_CAPTURE_TARGET_LENGTH) {
+    return dataUrl;
+  }
+
+  try {
+    const image = await loadImage(dataUrl);
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    if (!width || !height) return dataUrl;
+
+    const steps = [
+      { maxDimension: 1280, quality: 0.82 },
+      { maxDimension: 1080, quality: 0.76 },
+      { maxDimension: 900, quality: 0.72 },
+      { maxDimension: 760, quality: 0.68 },
+      { maxDimension: 640, quality: 0.62 },
+      { maxDimension: 520, quality: 0.58 },
+    ] as const;
+
+    let fallback = dataUrl;
+
+    for (const step of steps) {
+      const scale = Math.min(1, step.maxDimension / Math.max(width, height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.floor(width * scale));
+      canvas.height = Math.max(1, Math.floor(height * scale));
+
+      const context = canvas.getContext('2d');
+      if (!context) continue;
+
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const candidate = canvas.toDataURL('image/jpeg', step.quality);
+      fallback = candidate;
+
+      if (candidate.length <= STORAGE_CAPTURE_TARGET_LENGTH) {
+        return candidate;
+      }
+    }
+
+    return fallback;
+  } catch {
+    return dataUrl;
+  }
 }
 
 function buildDebugPriceBreakdown(priceEstimate: number) {
@@ -157,7 +221,8 @@ export function AqquirePage() {
     try {
       await sleep(1000);
 
-      const pending = await startCaptureProcuring({ capturedImageUrl: imageDataUrl });
+      const storageImageDataUrl = await optimizeDataUrlForStorage(imageDataUrl);
+      const pending = await startCaptureProcuring({ capturedImageUrl: storageImageDataUrl });
       void navigate('/vault');
 
       void (async () => {
@@ -216,7 +281,7 @@ export function AqquirePage() {
             vaultItemId: pending.vaultItemId,
             displayName: result.displayName,
             heroImageUrl: result.heroImageUrl,
-            capturedImageUrl: result.capturedImageUrl,
+            capturedImageUrl: storageImageDataUrl,
             category: result.category,
             priceEstimate: result.priceEstimate,
             currency: result.currency,

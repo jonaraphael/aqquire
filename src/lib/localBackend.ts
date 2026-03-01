@@ -6,6 +6,11 @@ import { analyzeWithOpenAiStaged, type OpenAiLookupStageUpdate } from '@/lib/ope
 const STORAGE_KEY = 'aqquire.local.db.v1';
 const MIN_FEED_PRICE = 1000;
 const FEED_COMMIT_DEBOUNCE_MS = 10_000;
+const STORAGE_KEEP_RECENT_IMAGE_ITEMS = 2;
+const STORAGE_MAX_DATA_IMAGE_CHARS = 180_000;
+const STORAGE_MAX_FEED_ITEMS_ON_PRESSURE = 180;
+const STORAGE_IMAGE_PLACEHOLDER =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 480 360'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23161022'/%3E%3Cstop offset='100%25' stop-color='%230d0b14'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='480' height='360' fill='url(%23g)'/%3E%3Ccircle cx='118' cy='96' r='48' fill='%23c89f58' fill-opacity='0.24'/%3E%3Ccircle cx='372' cy='268' r='56' fill='%23f3d9a0' fill-opacity='0.16'/%3E%3C/svg%3E";
 
 type Category = (typeof CATEGORY_OPTIONS)[number];
 type VaultStatus = (typeof VAULT_STATUSES)[number];
@@ -461,11 +466,110 @@ function getSnapshot() {
   return databaseState;
 }
 
-function persistDatabase(next: Database) {
-  databaseState = next;
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+function isImageDataUrl(value: unknown): value is string {
+  return typeof value === 'string' && value.startsWith('data:image/');
+}
+
+function isQuotaExceededError(error: unknown) {
+  if (!(error instanceof DOMException)) return false;
+  return (
+    error.name === 'QuotaExceededError' ||
+    error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    error.code === 22 ||
+    error.code === 1014
+  );
+}
+
+function compactDatabaseForStorage(input: Database, aggressive = false): Database {
+  const draft = cloneDatabase(input);
+  const keepImageIds = new Set(
+    aggressive
+      ? []
+      : [...draft.vaultItems]
+          .sort((a, b) => b.updatedAt - a.updatedAt)
+          .slice(0, STORAGE_KEEP_RECENT_IMAGE_ITEMS)
+          .map((item) => item.id),
+  );
+
+  for (const item of draft.vaultItems) {
+    const keepImagePayload = keepImageIds.has(item.id);
+
+    if (isImageDataUrl(item.capturedImageUrl)) {
+      const shouldStripCaptured = aggressive || !keepImagePayload || item.capturedImageUrl.length > STORAGE_MAX_DATA_IMAGE_CHARS;
+      if (shouldStripCaptured) {
+        item.capturedImageUrl = undefined;
+      }
+    }
+
+    if (isImageDataUrl(item.heroImageUrl)) {
+      const shouldStripHero = aggressive || !keepImagePayload || item.heroImageUrl.length > STORAGE_MAX_DATA_IMAGE_CHARS;
+      if (shouldStripHero) {
+        item.heroImageUrl = isImageDataUrl(item.capturedImageUrl) ? item.capturedImageUrl : STORAGE_IMAGE_PLACEHOLDER;
+      }
+    }
   }
+
+  for (const feedItem of draft.feedItems) {
+    if (isImageDataUrl(feedItem.heroImageUrl)) {
+      const tooLarge = feedItem.heroImageUrl.length > Math.floor(STORAGE_MAX_DATA_IMAGE_CHARS * 0.72);
+      if (aggressive || tooLarge) {
+        feedItem.heroImageUrl = STORAGE_IMAGE_PLACEHOLDER;
+      }
+    }
+  }
+
+  if (aggressive && draft.feedItems.length > STORAGE_MAX_FEED_ITEMS_ON_PRESSURE) {
+    draft.feedItems = [...draft.feedItems]
+      .sort((a, b) => b.freshnessScore - a.freshnessScore)
+      .slice(0, STORAGE_MAX_FEED_ITEMS_ON_PRESSURE);
+  }
+
+  if (draft.vaultCommitLocks.length > 240) {
+    draft.vaultCommitLocks = draft.vaultCommitLocks.slice(-240);
+  }
+
+  return draft;
+}
+
+function persistDatabase(next: Database) {
+  let persistedState = next;
+
+  if (typeof window !== 'undefined') {
+    const write = (candidate: Database) => {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(candidate));
+    };
+
+    try {
+      write(persistedState);
+    } catch (error) {
+      if (!isQuotaExceededError(error)) {
+        throw error;
+      }
+
+      persistedState = compactDatabaseForStorage(persistedState, false);
+
+      try {
+        write(persistedState);
+      } catch (retryError) {
+        if (!isQuotaExceededError(retryError)) {
+          throw retryError;
+        }
+
+        persistedState = compactDatabaseForStorage(persistedState, true);
+
+        try {
+          write(persistedState);
+        } catch (finalError) {
+          if (!isQuotaExceededError(finalError)) {
+            throw finalError;
+          }
+          console.warn('Unable to persist AQQUIRE local data due to storage quota constraints.', finalError);
+        }
+      }
+    }
+  }
+
+  databaseState = persistedState;
   for (const listener of listeners) {
     listener();
   }
