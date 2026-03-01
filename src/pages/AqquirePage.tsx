@@ -276,7 +276,7 @@ export function AqquirePage() {
       {isCapturing ? (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/65">
           <div className="rounded-full border border-champagne/45 bg-champagne/10 px-4 py-2 text-xs uppercase tracking-[0.18em] text-champagne">
-            Processing
+            Procuring
           </div>
         </div>
       ) : null}

@@ -51,8 +51,18 @@ interface ResponsesPayload {
   }>;
 }
 
+type ReasoningEffort = 'low' | 'medium' | 'high';
+
 function getOpenAiApiKey() {
   return import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.OPENAI_API_KEY;
+}
+
+function normalizeReasoningEffort(input: string | undefined, fallback: ReasoningEffort): ReasoningEffort {
+  const value = (input ?? '').trim().toLowerCase();
+  if (value === 'low' || value === 'medium' || value === 'high') {
+    return value;
+  }
+  return fallback;
 }
 
 function normalizeCategory(input: string | undefined): Category {
@@ -123,28 +133,50 @@ async function callResponsesApi(body: Record<string, unknown>): Promise<Response
     );
   }
 
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const request = async (payload: Record<string, unknown>) =>
+    fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`OpenAI request failed (${response.status}): ${detail}`);
+  const response = await request(body);
+
+  if (response.ok) {
+    return (await response.json()) as ResponsesPayload;
   }
 
-  return (await response.json()) as ResponsesPayload;
+  const detail = await response.text();
+  const reasoningRejected =
+    typeof body.reasoning !== 'undefined' &&
+    /reasoning/i.test(detail) &&
+    /(unknown|invalid|unsupported)/i.test(detail);
+
+  if (reasoningRejected) {
+    const retryBody = { ...body };
+    delete retryBody.reasoning;
+
+    const retry = await request(retryBody);
+    if (retry.ok) {
+      return (await retry.json()) as ResponsesPayload;
+    }
+    const retryDetail = await retry.text();
+    throw new Error(`OpenAI request failed (${retry.status}) after reasoning fallback: ${retryDetail}`);
+  }
+
+  throw new Error(`OpenAI request failed (${response.status}): ${detail}`);
 }
 
 async function detectPrimaryTarget(imageDataUrl: string): Promise<TargetDetection> {
   const model = import.meta.env.VITE_OPENAI_VISION_MODEL || 'gpt-5.2';
+  const reasoningEffort = normalizeReasoningEffort(import.meta.env.VITE_OPENAI_VISION_REASONING_EFFORT, 'high');
   const payload = await callResponsesApi({
     model,
-    temperature: 0.2,
+    temperature: 0,
+    reasoning: { effort: reasoningEffort },
     input: [
       {
         role: 'user',
@@ -152,12 +184,14 @@ async function detectPrimaryTarget(imageDataUrl: string): Promise<TargetDetectio
           {
             type: 'input_text',
             text:
-              'Identify the single most prominent primary object in this image. Return strict JSON only with keys: canonicalName, category, confidence, brandHints, keyAttributes, searchQuery. ' +
+              'Identify the single most prominent primary purchasable object in this image. Ignore people, background, and packaging unless packaging is clearly the product itself. ' +
+              'Reason carefully about shape, materials, logo cues, and scale before deciding. Return strict JSON only with keys: canonicalName, category, confidence, brandHints, keyAttributes, searchQuery. ' +
               `category must be one of: ${CATEGORY_OPTIONS.join(', ')}.`,
           },
           {
             type: 'input_image',
             image_url: imageDataUrl,
+            detail: 'high',
           },
         ],
       },
@@ -182,9 +216,11 @@ async function detectPrimaryTarget(imageDataUrl: string): Promise<TargetDetectio
 
 async function lookupOnline(target: TargetDetection): Promise<OnlineLookup> {
   const model = import.meta.env.VITE_OPENAI_SEARCH_MODEL || 'gpt-5.2';
+  const reasoningEffort = normalizeReasoningEffort(import.meta.env.VITE_OPENAI_SEARCH_REASONING_EFFORT, 'medium');
   const payload = await callResponsesApi({
     model,
     temperature: 0.1,
+    reasoning: { effort: reasoningEffort },
     tools: [{ type: 'web_search_preview' }],
     input: `Use web search to find the best real-world product match for "${target.searchQuery}".
 Return strict JSON only with keys:
