@@ -14,6 +14,9 @@ interface TargetDetection {
 interface OnlineLookup {
   displayName: string;
   heroImageUrl?: string;
+  heroImageAlternates?: string[];
+  heroImageSource?: string;
+  heroImageQuality?: string;
   priceEstimate?: number;
   currency?: string;
   supplierName?: string;
@@ -181,16 +184,23 @@ async function lookupOnline(target: TargetDetection): Promise<OnlineLookup> {
   const model = import.meta.env.VITE_OPENAI_SEARCH_MODEL || 'gpt-5.2';
   const payload = await callResponsesApi({
     model,
-    temperature: 0.2,
+    temperature: 0.1,
     tools: [{ type: 'web_search_preview' }],
     input: `Use web search to find the best real-world product match for "${target.searchQuery}".
 Return strict JSON only with keys:
-displayName, heroImageUrl, priceEstimate, currency, supplierName, supplierUrl, uniqueFlag.
+displayName, heroImageUrl, heroImageAlternates, heroImageSource, heroImageQuality, priceEstimate, currency, supplierName, supplierUrl, uniqueFlag.
 Rules:
-- heroImageUrl must be a direct image URL when possible.
+- heroImageUrl must be a direct URL to a premium marketing image and should not be a thumbnail.
+- Prefer official manufacturer source materials first (brand product page image/CDN, brand press kit, lookbook).
+- If manufacturer assets are unavailable, use an authorized luxury retailer listing image.
+- Favor high resolution images (ideally >= 1600px longest side, studio quality, clean background).
+- Avoid social media screenshots, user-generated images, watermarks, collage graphics, or low-resolution previews.
+- heroImageAlternates should include up to 3 additional direct image URLs ranked by quality.
+- heroImageSource should be "manufacturer", "authorized_retailer", or "other".
+- heroImageQuality should be "high", "medium", or "low".
 - supplierUrl should be the best canonical listing URL.
 - priceEstimate should be a number in USD unless a different currency is clear.
-- If unknown, use null values.`,
+- If unknown, use null values but still return best available non-null heroImageUrl when possible.`,
   });
 
   const text = responseText(payload);
@@ -202,6 +212,11 @@ Rules:
   return {
     displayName: parsed.displayName ? String(parsed.displayName) : target.canonicalName,
     heroImageUrl: parsed.heroImageUrl ? String(parsed.heroImageUrl) : undefined,
+    heroImageAlternates: Array.isArray(parsed.heroImageAlternates)
+      ? parsed.heroImageAlternates.map((item) => String(item))
+      : undefined,
+    heroImageSource: parsed.heroImageSource ? String(parsed.heroImageSource) : undefined,
+    heroImageQuality: parsed.heroImageQuality ? String(parsed.heroImageQuality) : undefined,
     priceEstimate:
       typeof parsed.priceEstimate === 'number' && Number.isFinite(parsed.priceEstimate)
         ? parsed.priceEstimate
@@ -213,9 +228,44 @@ Rules:
   };
 }
 
+function normalizeImageUrl(candidate: string | undefined): string | null {
+  if (!candidate) return null;
+  if (!/^https?:\/\//i.test(candidate)) return null;
+
+  try {
+    const url = new URL(candidate);
+    const widthParam = url.searchParams.get('w') ?? url.searchParams.get('width');
+    const heightParam = url.searchParams.get('h') ?? url.searchParams.get('height');
+
+    if (widthParam && Number(widthParam) > 0 && Number(widthParam) < 1600) {
+      url.searchParams.set(url.searchParams.has('w') ? 'w' : 'width', '2200');
+    }
+    if (heightParam && Number(heightParam) > 0 && Number(heightParam) < 1600) {
+      url.searchParams.set(url.searchParams.has('h') ? 'h' : 'height', '2200');
+    }
+    if (url.searchParams.has('q')) {
+      url.searchParams.set('q', '90');
+    }
+    return url.toString();
+  } catch {
+    return candidate;
+  }
+}
+
+function chooseMarketingImageUrl(online: OnlineLookup): string | null {
+  const candidates = [online.heroImageUrl, ...(online.heroImageAlternates ?? [])]
+    .map((item) => normalizeImageUrl(item))
+    .filter((item): item is string => !!item);
+
+  if (candidates.length === 0) return null;
+
+  const preferred = candidates.find((url) => !/thumb|thumbnail|small|icon/i.test(url));
+  return preferred ?? candidates[0];
+}
+
 function resolvedImageUrl(online: OnlineLookup, capturedImageUrl: string): string {
-  const candidate = online.heroImageUrl;
-  if (candidate && /^https?:\/\//i.test(candidate)) {
+  const candidate = chooseMarketingImageUrl(online);
+  if (candidate) {
     return candidate;
   }
   return capturedImageUrl;

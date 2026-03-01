@@ -39,6 +39,12 @@ interface CaptureResult {
 }
 
 const AQQUIRE_CAPTURE_EVENT = 'aqquire:capture';
+const CAMERA_SPARKLES = [
+  { left: '14%', top: '18%', delay: '0.2s', duration: '4.6s' },
+  { left: '82%', top: '24%', delay: '1.4s', duration: '5.2s' },
+  { left: '66%', top: '72%', delay: '2.1s', duration: '5.6s' },
+  { left: '28%', top: '78%', delay: '0.9s', duration: '4.9s' },
+] as const;
 
 function fileToDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -70,6 +76,7 @@ export function AqquirePage() {
 
   const [cameraReady, setCameraReady] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [capturedPreviewUrl, setCapturedPreviewUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -120,6 +127,7 @@ export function AqquirePage() {
 
     captureLockRef.current = true;
     setIsCapturing(true);
+    setCapturedPreviewUrl(imageDataUrl);
     setErrorMessage(null);
 
     try {
@@ -148,6 +156,7 @@ export function AqquirePage() {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Capture failed. Try again.';
       setErrorMessage(message);
+      setCapturedPreviewUrl(null);
     } finally {
       setIsCapturing(false);
       captureLockRef.current = false;
@@ -217,18 +226,30 @@ export function AqquirePage() {
         }}
       />
 
-      <video
-        ref={videoRef}
-        muted
-        playsInline
-        className="h-full w-full object-cover"
-      />
+      <video ref={videoRef} muted playsInline className="h-full w-full object-cover" />
+
+      {capturedPreviewUrl ? (
+        <img src={capturedPreviewUrl} alt="Captured frame" className="absolute inset-0 h-full w-full object-cover" />
+      ) : null}
 
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(248,220,152,0.14),transparent_42%),radial-gradient(circle_at_80%_70%,rgba(220,165,92,0.14),transparent_46%)]" />
+      <div className="pointer-events-none absolute inset-0">
+        {CAMERA_SPARKLES.map((sparkle, index) => (
+          <span
+            key={index}
+            className="camera-sparkle"
+            style={{
+              left: sparkle.left,
+              top: sparkle.top,
+              animationDelay: sparkle.delay,
+              animationDuration: sparkle.duration,
+            }}
+          />
+        ))}
+      </div>
 
       <div className="absolute inset-x-0 top-0 z-20 border-b border-white/10 bg-black/35 px-4 py-3 backdrop-blur">
         <p className="font-display text-2xl tracking-[0.2em] text-champagne">AQQUIRE</p>
-        <p className="text-[11px] uppercase tracking-[0.2em] text-pearl/70">Live camera. Tap AQQUIRE circle to capture.</p>
       </div>
 
       <div className="absolute inset-x-0 bottom-0 z-20 space-y-3 border-t border-white/10 bg-black/40 p-4 backdrop-blur">
