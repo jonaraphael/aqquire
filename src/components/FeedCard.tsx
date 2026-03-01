@@ -50,6 +50,7 @@ export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
   const [hasCommitted, setHasCommitted] = useState(false);
   const [pendingIndicator, setPendingIndicator] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right'>('right');
 
   const fillRatio = hasCommitted ? 1 : progress;
 
@@ -81,7 +82,11 @@ export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
       onDrag={(_event, info) => {
         if (hasCommitted) return;
         const width = rowRef.current?.clientWidth ?? 1;
-        const dragRatio = Math.min(1, Math.abs(info.offset.x) / width);
+        const offset = info.offset.x;
+        if (Math.abs(offset) > 2) {
+          setSwipeDirection(offset < 0 ? 'left' : 'right');
+        }
+        const dragRatio = Math.min(1, Math.abs(offset) / width);
         setProgress(dragRatio);
       }}
       onDragStart={() => {
@@ -102,7 +107,12 @@ export function FeedCard({ item, debugMode, onCommit }: FeedCardProps) {
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-[#f7deac26] via-[#f0cb8652] to-[#b5833955]"
+          className={cn(
+            'absolute inset-y-0 h-full',
+            swipeDirection === 'left'
+              ? 'right-0 bg-gradient-to-l from-[#f7deac26] via-[#f0cb8652] to-[#b5833955]'
+              : 'left-0 bg-gradient-to-r from-[#f7deac26] via-[#f0cb8652] to-[#b5833955]',
+          )}
           style={{
             width: `${fillRatio * 100}%`,
             transition: hasCommitted ? 'width 220ms ease-out' : isDragging ? 'none' : 'width 120ms ease-out',
