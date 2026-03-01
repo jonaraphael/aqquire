@@ -3,9 +3,10 @@ import { cn } from '@/lib/utils';
 
 interface StatusPillProps {
   status: (typeof VAULT_STATUSES)[number];
+  label?: string;
 }
 
-export function StatusPill({ status }: StatusPillProps) {
+export function StatusPill({ status, label }: StatusPillProps) {
   return (
     <span
       className={cn(
@@ -13,7 +14,7 @@ export function StatusPill({ status }: StatusPillProps) {
         STATUS_COLORS[status],
       )}
     >
-      {status}
+      {label ?? status}
     </span>
   );
 }

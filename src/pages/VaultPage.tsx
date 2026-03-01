@@ -152,7 +152,7 @@ export function VaultPage() {
                     title="Open supplier listing"
                     className="cursor-pointer"
                   >
-                    <StatusPill status={item.status} />
+                    <StatusPill status={item.status} label="pending." />
                   </button>
                 ) : (
                   <StatusPill status={item.status} />

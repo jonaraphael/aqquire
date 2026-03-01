@@ -78,7 +78,6 @@ export function TrophyCarousel({ trophies }: TrophyCarouselProps) {
     <section className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-display text-xl tracking-[0.14em] text-champagne">Trophy Case</h3>
-        <p className="text-xs uppercase tracking-[0.18em] text-pearl/55">One line prestige</p>
       </div>
 
       <div className="no-scrollbar overflow-x-auto pb-1">

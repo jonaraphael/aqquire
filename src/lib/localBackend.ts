@@ -1602,7 +1602,7 @@ function updateCaptureProcuringStageInDatabase(db: Database, identity: Identity,
 
   item.updatedAt = Date.now();
 
-  if (item.supplierUrl && item.priceEstimate >= MIN_FEED_PRICE) {
+  if (item.priceEstimate >= MIN_FEED_PRICE) {
     upsertFeedItemForVaultItem(db, viewer, item);
   }
 
