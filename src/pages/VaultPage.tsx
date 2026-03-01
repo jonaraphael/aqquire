@@ -44,15 +44,22 @@ function SwipeableVaultImage({
 }) {
   const touchStartX = useRef<number | null>(null);
   const pointerStartX = useRef<number | null>(null);
+  const suppressClickUntil = useRef(0);
   const [showCaptured, setShowCaptured] = useState(false);
+  const [rotationY, setRotationY] = useState(0);
+  const [lastFlipDirection, setLastFlipDirection] = useState<1 | -1>(1);
 
   const hasCapturedVariant =
     typeof item.capturedImageUrl === 'string' &&
     item.capturedImageUrl.length > 0 &&
     item.capturedImageUrl !== item.heroImageUrl;
 
-  const activeImage = hasCapturedVariant && showCaptured ? item.capturedImageUrl : item.heroImageUrl;
-  const imageLabel = hasCapturedVariant && showCaptured ? 'Captured' : 'Marketing';
+  const flipImage = (direction: 1 | -1) => {
+    if (!hasCapturedVariant) return;
+    setLastFlipDirection(direction);
+    setShowCaptured((current) => !current);
+    setRotationY((current) => current + 180 * direction);
+  };
 
   return (
     <div
@@ -67,27 +74,70 @@ function SwipeableVaultImage({
         touchStartX.current = null;
 
         if (Math.abs(delta) >= IMAGE_SWIPE_THRESHOLD) {
-          setShowCaptured((current) => !current);
+          suppressClickUntil.current = Date.now() + 280;
+          flipImage(delta >= 0 ? 1 : -1);
         }
       }}
       onPointerDown={(event) => {
+        if (event.pointerType === 'touch') return;
         pointerStartX.current = event.clientX;
       }}
       onPointerUp={(event) => {
+        if (event.pointerType === 'touch') return;
         if (!hasCapturedVariant || pointerStartX.current === null) return;
         const delta = event.clientX - pointerStartX.current;
         pointerStartX.current = null;
 
         if (Math.abs(delta) >= IMAGE_SWIPE_THRESHOLD) {
-          setShowCaptured((current) => !current);
+          suppressClickUntil.current = Date.now() + 280;
+          flipImage(delta >= 0 ? 1 : -1);
         }
       }}
+      onClick={() => {
+        if (!hasCapturedVariant) return;
+        if (Date.now() < suppressClickUntil.current) return;
+        flipImage(lastFlipDirection);
+      }}
+      data-facing={showCaptured ? 'captured' : 'marketing'}
+      style={{ perspective: '1100px' }}
     >
-      <img src={activeImage} alt={item.displayName} className={className} loading="lazy" />
+      {!hasCapturedVariant ? <img src={item.heroImageUrl} alt={item.displayName} className={className} loading="lazy" /> : null}
+
       {hasCapturedVariant ? (
-        <span className="pointer-events-none absolute bottom-2 right-2 rounded-full border border-white/25 bg-black/45 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-pearl/85">
-          {imageLabel}
-        </span>
+        <div
+          className="relative h-full w-full transition-transform duration-500 ease-[cubic-bezier(0.22,0.72,0.2,1)]"
+          style={{
+            transformStyle: 'preserve-3d',
+            transform: `rotateY(${rotationY}deg)`,
+          }}
+        >
+          <div
+            className="absolute inset-0"
+            style={{
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+            }}
+          >
+            <img src={item.heroImageUrl} alt={item.displayName} className={className} loading="lazy" />
+            <span className="pointer-events-none absolute bottom-2 right-2 rounded-full border border-white/25 bg-black/45 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-pearl/85">
+              Marketing
+            </span>
+          </div>
+
+          <div
+            className="absolute inset-0"
+            style={{
+              transform: 'rotateY(180deg)',
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+            }}
+          >
+            <img src={item.capturedImageUrl} alt={`${item.displayName} captured`} className={className} loading="lazy" />
+            <span className="pointer-events-none absolute bottom-2 right-2 rounded-full border border-white/25 bg-black/45 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-pearl/85">
+              Captured
+            </span>
+          </div>
+        </div>
       ) : null}
     </div>
   );
