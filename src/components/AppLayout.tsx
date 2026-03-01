@@ -1,10 +1,38 @@
-import { Outlet, useLocation } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { BottomNav } from '@/components/BottomNav';
 import { cn } from '@/lib/utils';
 
+const AQQUIRE_PROCUREMENT_COMPLETE_EVENT = 'aqquire:procurement-complete';
+const TOAST_SWIPE_DISMISS_PX = 28;
+
 export function AppLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const isAqquire = location.pathname === '/aqquire';
+  const [procurementToast, setProcurementToast] = useState<string | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const pointerStartY = useRef<number | null>(null);
+  const suppressClickUntil = useRef(0);
+
+  useEffect(() => {
+    const handleProcurementComplete = (event: Event) => {
+      const custom = event as CustomEvent<{ displayName?: string }>;
+      const name = custom.detail?.displayName?.trim();
+      setProcurementToast(name ? `${name} priced. Tap to open Vault.` : 'Price procured. Tap to open Vault.');
+    };
+
+    window.addEventListener(AQQUIRE_PROCUREMENT_COMPLETE_EVENT, handleProcurementComplete);
+    return () => {
+      window.removeEventListener(AQQUIRE_PROCUREMENT_COMPLETE_EVENT, handleProcurementComplete);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!procurementToast) return;
+    const timeout = window.setTimeout(() => setProcurementToast(null), 10_000);
+    return () => window.clearTimeout(timeout);
+  }, [procurementToast]);
 
   return (
     <div className="min-h-dvh bg-luxury text-pearl">
@@ -33,6 +61,47 @@ export function AppLayout() {
           </footer>
         ) : null}
       </div>
+
+      {procurementToast ? (
+        <button
+          type="button"
+          onClick={() => {
+            if (Date.now() < suppressClickUntil.current) return;
+            setProcurementToast(null);
+            void navigate('/vault');
+          }}
+          onTouchStart={(event) => {
+            touchStartY.current = event.changedTouches[0]?.clientY ?? null;
+          }}
+          onTouchEnd={(event) => {
+            if (touchStartY.current === null) return;
+            const endY = event.changedTouches[0]?.clientY ?? touchStartY.current;
+            const delta = touchStartY.current - endY;
+            touchStartY.current = null;
+            if (delta >= TOAST_SWIPE_DISMISS_PX) {
+              suppressClickUntil.current = Date.now() + 320;
+              setProcurementToast(null);
+            }
+          }}
+          onPointerDown={(event) => {
+            pointerStartY.current = event.clientY;
+          }}
+          onPointerUp={(event) => {
+            if (pointerStartY.current === null) return;
+            const delta = pointerStartY.current - event.clientY;
+            pointerStartY.current = null;
+            if (delta >= TOAST_SWIPE_DISMISS_PX) {
+              suppressClickUntil.current = Date.now() + 320;
+              setProcurementToast(null);
+            }
+          }}
+          className="fixed bottom-24 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-champagne/45 bg-obsidian/95 px-4 py-3 text-left shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
+        >
+          <p className="text-xs uppercase tracking-[0.16em] text-champagne">Procurement Complete</p>
+          <p className="mt-1 text-sm text-pearl/90">{procurementToast}</p>
+          <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-pearl/60">Tap to Vault · Swipe Up to Hide</p>
+        </button>
+      ) : null}
 
       <BottomNav />
     </div>

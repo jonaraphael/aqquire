@@ -44,6 +44,7 @@ interface CaptureResult {
 }
 
 const AQQUIRE_CAPTURE_EVENT = 'aqquire:capture';
+const AQQUIRE_PROCUREMENT_COMPLETE_EVENT = 'aqquire:procurement-complete';
 const CAMERA_SPARKLES = [
   { left: '14%', top: '18%', delay: '0.2s', duration: '4.6s' },
   { left: '82%', top: '24%', delay: '1.4s', duration: '5.2s' },
@@ -171,6 +172,15 @@ export function AqquirePage() {
             confidence: result.confidence,
             debugPriceBreakdown: result.debugPriceBreakdown,
           });
+
+          window.dispatchEvent(
+            new CustomEvent(AQQUIRE_PROCUREMENT_COMPLETE_EVENT, {
+              detail: {
+                displayName: result.displayName,
+                vaultItemId: pending.vaultItemId,
+              },
+            }),
+          );
         } catch {
           // Keep the placeholder item pending so the user doesn't see a hard failure for transient enrichment issues.
         }
