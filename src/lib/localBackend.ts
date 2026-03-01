@@ -1024,6 +1024,10 @@ interface VaultListItem {
   } | null;
 }
 
+function isDeferredCaptureFailure(item: VaultItemRecord) {
+  return item.status === 'failed' && item.priceEstimate <= 0 && !!item.capturedImageUrl && !item.supplierUrl;
+}
+
 function listVaultInDatabase(db: Database, identity: Identity, debug: boolean | undefined): VaultListItem[] {
   const viewer = requireViewer(db, identity);
   const debugMode = !!debug && viewer.debugEnabled;
@@ -1032,13 +1036,7 @@ function listVaultInDatabase(db: Database, identity: Identity, debug: boolean | 
     .filter((item) => item.userId === viewer.id)
     .sort((a, b) => b.createdAt - a.createdAt)
     .map((item) => {
-      const looksLikeCapturePlaceholderFailure =
-        item.status === 'failed' &&
-        item.priceEstimate <= 0 &&
-        !!item.capturedImageUrl &&
-        !item.supplierUrl;
-
-      const renderedStatus: VaultStatus = looksLikeCapturePlaceholderFailure ? 'pending' : item.status;
+      const renderedStatus: VaultStatus = isDeferredCaptureFailure(item) ? 'pending' : item.status;
 
       return {
       _id: item.id,
@@ -1072,7 +1070,7 @@ function cancelPendingVaultItemInDatabase(db: Database, identity: Identity, vaul
     throw new Error('Vault item not found');
   }
 
-  if (item.status !== 'pending') {
+  if (item.status !== 'pending' && !isDeferredCaptureFailure(item)) {
     return { canceled: false, reason: 'not_pending' as const };
   }
 
