@@ -194,7 +194,7 @@ export function FeedPage() {
 
   return (
     <section className="space-y-4">
-      <div className="sticky top-0 z-30 -mx-3 border-b border-white/10 bg-obsidian/95 px-3 pb-3 pt-1 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+      <div className="sticky top-0 z-30 -mx-3 border-b border-champagne/15 bg-luxury px-3 pb-3 pt-1 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <h1 className="mb-3 font-display text-2xl tracking-[0.12em] text-pearl">Feed</h1>
 
         <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
