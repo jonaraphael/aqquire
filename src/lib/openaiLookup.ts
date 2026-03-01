@@ -93,6 +93,23 @@ function normalizeWebUrl(input: string | undefined): string | undefined {
   }
 }
 
+function normalizePriceValue(input: unknown): number | undefined {
+  if (typeof input === 'number' && Number.isFinite(input) && input > 0) {
+    return input;
+  }
+
+  if (typeof input === 'string') {
+    const cleaned = input.replace(/[^0-9.]/g, '');
+    if (!cleaned) return undefined;
+    const parsed = Number(cleaned);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
+
 function parseJsonFromText<T>(raw: string): T | null {
   const trimmed = raw.trim();
 
@@ -254,10 +271,13 @@ Rules:
 - heroImageAlternates should include up to 3 additional direct image URLs ranked by quality.
 - heroImageSource should be "manufacturer", "authorized_retailer", or "other".
 - heroImageQuality should be "high", "medium", or "low".
-- supplierUrl must be a direct purchasable product detail page (not editorial/search/category pages).
+- supplierUrl must be a direct listing/product detail page for this exact item (not editorial/search/category pages).
+- For category "Automobiles", supplierUrl may be a dealer inventory page or manufacturer build/order page for the same model/trim.
 - priceEstimate must be the currently listed purchase price on supplierUrl.
 - priceSourceUrl must be the exact URL where priceEstimate was read (usually same as supplierUrl).
-- purchasable must be true only when an add-to-cart/buy flow is available.
+- purchasable must be true when the page clearly supports purchasing flow:
+  add-to-cart/buy flow for standard commerce, or
+  dealer/order/reservation inquiry flow for automobiles.
 - priceConfidence is 0-1 confidence that the price is exact and current.
 - If no purchasable page with visible price can be found, return supplierUrl: null, priceEstimate: null, purchasable: false.
 - If unknown, use null values but still return best available non-null heroImageUrl when possible.`,
@@ -277,10 +297,7 @@ Rules:
       : undefined,
     heroImageSource: parsed.heroImageSource ? String(parsed.heroImageSource) : undefined,
     heroImageQuality: parsed.heroImageQuality ? String(parsed.heroImageQuality) : undefined,
-    priceEstimate:
-      typeof parsed.priceEstimate === 'number' && Number.isFinite(parsed.priceEstimate)
-        ? parsed.priceEstimate
-        : undefined,
+    priceEstimate: normalizePriceValue(parsed.priceEstimate),
     currency: normalizeCurrencyCode(parsed.currency ? String(parsed.currency) : undefined) ?? 'USD',
     supplierName: parsed.supplierName ? String(parsed.supplierName) : undefined,
     supplierUrl: normalizeWebUrl(parsed.supplierUrl ? String(parsed.supplierUrl) : undefined),
@@ -318,6 +335,7 @@ supplierName, supplierUrl, priceEstimate, currency, priceSourceUrl, purchasable,
 
 Rules:
 - supplierUrl must be a direct product page where this exact item can be purchased now.
+- For category "Automobiles", supplierUrl may be a dealer inventory page or manufacturer order/reservation page.
 - priceEstimate must exactly match the currently listed purchase price shown on priceSourceUrl.
 - If candidate listing is invalid, not purchasable, mismatched, or has no visible price, find a better purchasable listing.
 - Prefer official brand stores or authorized retailers.
@@ -348,11 +366,7 @@ Rules:
     priceSourceUrl: hasPriceSourceUrl
       ? normalizeWebUrl(parsed.priceSourceUrl ? String(parsed.priceSourceUrl) : undefined)
       : online.priceSourceUrl ?? online.supplierUrl,
-    priceEstimate: hasPriceEstimate
-      ? typeof parsed.priceEstimate === 'number' && Number.isFinite(parsed.priceEstimate)
-        ? parsed.priceEstimate
-        : undefined
-      : online.priceEstimate,
+    priceEstimate: hasPriceEstimate ? normalizePriceValue(parsed.priceEstimate) : online.priceEstimate,
     currency: hasCurrency
       ? normalizeCurrencyCode(parsed.currency ? String(parsed.currency) : undefined)
       : online.currency,

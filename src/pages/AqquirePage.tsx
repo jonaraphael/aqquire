@@ -3,7 +3,6 @@ import type { ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   useAnalyzeCapture,
-  useFailCaptureProcuring,
   useFinalizeCaptureProcuring,
   useStartCaptureProcuring,
   useViewerContext,
@@ -81,7 +80,6 @@ export function AqquirePage() {
   const analyzeCapture = useAnalyzeCapture();
   const startCaptureProcuring = useStartCaptureProcuring();
   const finalizeCaptureProcuring = useFinalizeCaptureProcuring();
-  const failCaptureProcuring = useFailCaptureProcuring();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -174,7 +172,7 @@ export function AqquirePage() {
             debugPriceBreakdown: result.debugPriceBreakdown,
           });
         } catch {
-          await failCaptureProcuring({ vaultItemId: pending.vaultItemId });
+          // Keep the placeholder item pending so the user doesn't see a hard failure for transient enrichment issues.
         }
       })();
     } catch (error: unknown) {
@@ -185,7 +183,7 @@ export function AqquirePage() {
       setIsCapturing(false);
       captureLockRef.current = false;
     }
-  }, [analyzeCapture, failCaptureProcuring, finalizeCaptureProcuring, navigate, startCaptureProcuring]);
+  }, [analyzeCapture, finalizeCaptureProcuring, navigate, startCaptureProcuring]);
 
   const snapLiveFrame = useCallback(async () => {
     if (!videoRef.current || videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {

@@ -1031,9 +1031,18 @@ function listVaultInDatabase(db: Database, identity: Identity, debug: boolean | 
   return db.vaultItems
     .filter((item) => item.userId === viewer.id)
     .sort((a, b) => b.createdAt - a.createdAt)
-    .map((item) => ({
+    .map((item) => {
+      const looksLikeCapturePlaceholderFailure =
+        item.status === 'failed' &&
+        item.priceEstimate <= 0 &&
+        !!item.capturedImageUrl &&
+        !item.supplierUrl;
+
+      const renderedStatus: VaultStatus = looksLikeCapturePlaceholderFailure ? 'pending' : item.status;
+
+      return {
       _id: item.id,
-      status: item.status,
+      status: renderedStatus,
       displayName: item.displayName,
       heroImageUrl: item.heroImageUrl,
       capturedImageUrl: item.capturedImageUrl,
@@ -1042,7 +1051,7 @@ function listVaultInDatabase(db: Database, identity: Identity, debug: boolean | 
       category: item.category,
       supplierUrl: item.supplierUrl,
       createdAt: item.createdAt,
-      canCancel: item.status === 'pending',
+      canCancel: renderedStatus === 'pending',
       debug: debugMode
         ? {
             supplierName: item.supplierName,
@@ -1051,7 +1060,8 @@ function listVaultInDatabase(db: Database, identity: Identity, debug: boolean | 
             priceBreakdown: item.debugPriceBreakdown,
           }
         : null,
-    }));
+    };
+    });
 }
 
 function cancelPendingVaultItemInDatabase(db: Database, identity: Identity, vaultItemId: string) {
