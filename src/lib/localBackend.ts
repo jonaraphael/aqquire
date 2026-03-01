@@ -1070,6 +1070,17 @@ function cancelPendingVaultItemInDatabase(db: Database, identity: Identity, vaul
   return { canceled: true };
 }
 
+function clearCanceledVaultItemsInDatabase(db: Database, identity: Identity) {
+  const viewer = requireViewer(db, identity);
+  const before = db.vaultItems.length;
+
+  db.vaultItems = db.vaultItems.filter((item) => !(item.userId === viewer.id && item.status === 'canceled'));
+
+  return {
+    cleared: before - db.vaultItems.length,
+  };
+}
+
 interface ProfileResult {
   displayHandle: string;
   avatarUrl?: string;
@@ -1679,6 +1690,18 @@ export function useCancelPendingVaultItem() {
     },
     [identity],
   );
+}
+
+export function useClearCanceledVaultItems() {
+  const identity = useIdentity();
+
+  return useCallback(async () => {
+    if (!identity) {
+      throw new Error('Not authenticated');
+    }
+
+    return mutateDatabase((db) => clearCanceledVaultItemsInDatabase(db, identity));
+  }, [identity]);
 }
 
 export function usePolicy() {

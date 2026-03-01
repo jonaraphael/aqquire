@@ -248,10 +248,6 @@ export function AqquirePage() {
         ))}
       </div>
 
-      <div className="absolute inset-x-0 top-0 z-20 border-b border-white/10 bg-black/35 px-4 py-3 backdrop-blur">
-        <p className="font-display text-2xl tracking-[0.2em] text-champagne">AQQUIRE</p>
-      </div>
-
       <div className="absolute inset-x-0 bottom-0 z-20 space-y-3 border-t border-white/10 bg-black/40 p-4 backdrop-blur">
         <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.16em] text-pearl/70">
           {!cameraReady ? <span>Initializing camera</span> : <span />}

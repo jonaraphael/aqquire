@@ -197,7 +197,6 @@ async function detectPrimaryTarget(imageDataUrl: string): Promise<TargetDetectio
   const reasoningEffort = normalizeReasoningEffort(import.meta.env.VITE_OPENAI_VISION_REASONING_EFFORT, 'high');
   const payload = await callResponsesApi({
     model,
-    temperature: 0,
     reasoning: { effort: reasoningEffort },
     input: [
       {
@@ -241,7 +240,6 @@ async function lookupOnline(target: TargetDetection): Promise<OnlineLookup> {
   const reasoningEffort = normalizeReasoningEffort(import.meta.env.VITE_OPENAI_SEARCH_REASONING_EFFORT, 'medium');
   const payload = await callResponsesApi({
     model,
-    temperature: 0,
     reasoning: { effort: reasoningEffort },
     tools: [{ type: 'web_search_preview' }],
     input: `Use web search to find the best real-world product match for "${target.searchQuery}".
@@ -303,7 +301,6 @@ async function validatePurchaseOffer(target: TargetDetection, online: OnlineLook
 
   const payload = await callResponsesApi({
     model,
-    temperature: 0,
     reasoning: { effort: reasoningEffort },
     tools: [{ type: 'web_search_preview' }],
     input: `Validate or replace this purchasable listing for the item below.

@@ -5,6 +5,7 @@ import { currency } from '@/lib/utils';
 import { useDebugMode } from '@/hooks/useDebugMode';
 import {
   useCancelPendingVaultItem,
+  useClearCanceledVaultItems,
   useListVault,
   useTrophyCase,
   useVaultProfile,
@@ -20,6 +21,7 @@ export function VaultPage() {
   const canceledItems = (vaultItems ?? []).filter((item: any) => item.status === 'canceled');
 
   const cancelPending = useCancelPendingVaultItem();
+  const clearCanceled = useClearCanceledVaultItems();
 
   return (
     <section className="space-y-6">
@@ -110,7 +112,18 @@ export function VaultPage() {
         <section className="space-y-3 pt-2">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-2xl tracking-[0.12em] text-pearl/80">Canceled</h2>
-            <p className="text-xs uppercase tracking-[0.16em] text-pearl/50">Bottom archive</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs uppercase tracking-[0.16em] text-pearl/50">Bottom archive</p>
+              <button
+                type="button"
+                onClick={() => {
+                  void clearCanceled();
+                }}
+                className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.15em] text-pearl/80"
+              >
+                Clear Canceled
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
