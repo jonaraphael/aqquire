@@ -44,7 +44,6 @@ interface CaptureResult {
 }
 
 const AQQUIRE_CAPTURE_EVENT = 'aqquire:capture';
-const AQQUIRE_PROCUREMENT_STARTED_EVENT = 'aqquire:procurement-started';
 const AQQUIRE_PROCUREMENT_COMPLETE_EVENT = 'aqquire:procurement-complete';
 const CAMERA_SPARKLES = [
   { left: '14%', top: '18%', delay: '0.2s', duration: '4.6s' },
@@ -148,13 +147,6 @@ export function AqquirePage() {
       await sleep(1000);
 
       const pending = await startCaptureProcuring({ capturedImageUrl: imageDataUrl });
-      window.dispatchEvent(
-        new CustomEvent(AQQUIRE_PROCUREMENT_STARTED_EVENT, {
-          detail: {
-            vaultItemId: pending.vaultItemId,
-          },
-        }),
-      );
       void navigate('/vault');
 
       void (async () => {
@@ -191,14 +183,6 @@ export function AqquirePage() {
           );
         } catch {
           // Keep the placeholder item pending so the user doesn't see a hard failure for transient enrichment issues.
-          window.dispatchEvent(
-            new CustomEvent(AQQUIRE_PROCUREMENT_COMPLETE_EVENT, {
-              detail: {
-                status: 'deferred',
-                vaultItemId: pending.vaultItemId,
-              },
-            }),
-          );
         }
       })();
     } catch (error: unknown) {

@@ -14,15 +14,26 @@ import {
 
 const IMAGE_SWIPE_THRESHOLD = 36;
 
-function priceDisplayLabel(item: any) {
+function priceDisplayContent(item: any, subdued = false) {
   if (item.status === 'pending' && (!item.priceEstimate || item.priceEstimate <= 0)) {
-    return 'Procuring Price';
+    return (
+      <span
+        className={
+          subdued
+            ? 'inline-flex items-center gap-2 text-sm uppercase tracking-[0.16em] text-pearl/60'
+            : 'inline-flex items-center gap-2 text-sm uppercase tracking-[0.16em] text-pearl/70'
+        }
+      >
+        <span className="h-3 w-3 rounded-full border border-champagne/70 border-t-transparent animate-spin" />
+        Procuring Price
+      </span>
+    );
   }
-  return currency(item.priceEstimate, item.currency);
-}
-
-function isReasoningPending(item: any) {
-  return item.status === 'pending' && (!item.priceEstimate || item.priceEstimate <= 0);
+  return (
+    <span className={subdued ? 'text-sm uppercase tracking-[0.16em] text-pearl/60' : 'text-sm uppercase tracking-[0.16em] text-pearl/70'}>
+      {currency(item.priceEstimate, item.currency)}
+    </span>
+  );
 }
 
 function SwipeableVaultImage({
@@ -148,14 +159,7 @@ export function VaultPage() {
                 )}
               </div>
 
-              <p className="text-sm uppercase tracking-[0.16em] text-pearl/70">{priceDisplayLabel(item)}</p>
-
-              {isReasoningPending(item) ? (
-                <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-champagne/85">
-                  <span className="h-3 w-3 rounded-full border border-champagne/70 border-t-transparent animate-spin" />
-                  Reasoning Through Image
-                </p>
-              ) : null}
+              <div>{priceDisplayContent(item)}</div>
 
               {item.canCancel ? (
                 <button
@@ -218,16 +222,7 @@ export function VaultPage() {
                     <p className="truncate font-display text-xl text-pearl/85">{item.displayName}</p>
                     <StatusPill status={item.status} />
                   </div>
-                  <p className="text-sm uppercase tracking-[0.16em] text-pearl/60">
-                    {priceDisplayLabel(item)}
-                  </p>
-
-                  {isReasoningPending(item) ? (
-                    <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-champagne/80">
-                      <span className="h-3 w-3 rounded-full border border-champagne/70 border-t-transparent animate-spin" />
-                      Reasoning Through Image
-                    </p>
-                  ) : null}
+                  <div>{priceDisplayContent(item, true)}</div>
                 </div>
               </article>
             ))}
