@@ -58,7 +58,20 @@ export function VaultPage() {
             <div className="mt-3 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <p className="truncate font-display text-xl text-pearl">{item.displayName}</p>
-                <StatusPill status={item.status} />
+                {item.status === 'pending' && item.supplierUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.open(item.supplierUrl, '_blank', 'noopener,noreferrer');
+                    }}
+                    title="Open supplier listing"
+                    className="cursor-pointer"
+                  >
+                    <StatusPill status={item.status} />
+                  </button>
+                ) : (
+                  <StatusPill status={item.status} />
+                )}
               </div>
 
               <p className="text-sm uppercase tracking-[0.16em] text-pearl/70">{currency(item.priceEstimate, item.currency)}</p>

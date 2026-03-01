@@ -1012,6 +1012,7 @@ interface VaultListItem {
   priceEstimate: number;
   currency: string;
   category: Category;
+  supplierUrl?: string;
   createdAt: number;
   canCancel: boolean;
   debug: {
@@ -1037,6 +1038,7 @@ function listVaultInDatabase(db: Database, identity: Identity, debug: boolean | 
       priceEstimate: item.priceEstimate,
       currency: item.currency,
       category: item.category,
+      supplierUrl: item.supplierUrl,
       createdAt: item.createdAt,
       canCancel: item.status === 'pending',
       debug: debugMode
