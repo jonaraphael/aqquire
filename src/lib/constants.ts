@@ -24,4 +24,4 @@ export const STATUS_COLORS: Record<(typeof VAULT_STATUSES)[number], string> = {
   failed: 'bg-rose-400/15 text-rose-200 border-rose-200/40',
 };
 
-export const APP_TITLE = 'aqquire-luxury-app';
+export const APP_TITLE = 'AQQUIRE';
