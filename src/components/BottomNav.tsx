@@ -66,20 +66,28 @@ function ShutterButton({ isAqquire, onPress }: { isAqquire: boolean; onPress: ()
 
 function FeedIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <rect x="3.2" y="4.2" width="17.6" height="15.6" rx="3" />
-      <path d="M7.2 8.2h9.6M7.2 12h9.6M7.2 15.8h6.1" />
-      <path d="M18.2 7.3l.4.8.9.1-.7.7.2 1-.8-.4-.8.4.2-1-.7-.7.9-.1.4-.8Z" />
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+      <path d="M4.2 8.8a7.8 7.8 0 0 0 15.6 0" />
+      <circle cx="6" cy="9.2" r="0.95" fill="currentColor" stroke="none" />
+      <circle cx="8.3" cy="11.4" r="0.95" fill="currentColor" stroke="none" />
+      <circle cx="10.8" cy="12.7" r="0.95" fill="currentColor" stroke="none" />
+      <circle cx="13.2" cy="12.7" r="0.95" fill="currentColor" stroke="none" />
+      <circle cx="15.7" cy="11.4" r="0.95" fill="currentColor" stroke="none" />
+      <circle cx="18" cy="9.2" r="0.95" fill="currentColor" stroke="none" />
+      <path d="M12 13.7v2.3" />
+      <path d="M10.7 17.1 12 19.6l1.3-2.5-1.3-1.2-1.3 1.2Z" />
     </svg>
   );
 }
 
 function VaultIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <path d="M12 3.5 5.4 6.1v5.3c0 4.1 2.6 7.8 6.6 9.1 4-1.3 6.6-5 6.6-9.1V6.1L12 3.5Z" />
-      <rect x="9.1" y="10.2" width="5.8" height="4.8" rx="1.1" />
-      <path d="M10.3 10.2V9.1A1.7 1.7 0 0 1 12 7.4a1.7 1.7 0 0 1 1.7 1.7v1.1" />
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+      <rect x="3.6" y="4.2" width="16.8" height="15.6" rx="2.3" />
+      <circle cx="12" cy="12" r="4.25" />
+      <circle cx="12" cy="12" r="1.15" fill="currentColor" stroke="none" />
+      <path d="M12 7.75v2.2M12 14.05v2.2M7.75 12h2.2M14.05 12h2.2" />
+      <path d="M6.3 7.4h2.1M6.3 16.6h2.1M15.6 7.4h2.1M15.6 16.6h2.1" />
     </svg>
   );
 }
