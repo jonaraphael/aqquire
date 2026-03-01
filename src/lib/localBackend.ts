@@ -166,18 +166,6 @@ interface FeedSeedEntry {
   brand: string;
 }
 
-interface CatalogEntry {
-  displayName: string;
-  category: Category;
-  price: number;
-  currency: string;
-  heroImageUrl: string;
-  supplierName: string;
-  supplierUrl: string;
-  uniqueFlag: boolean;
-  brand: string;
-}
-
 const TROPHY_DEFINITIONS = [
   {
     key: 'trend_setter',
@@ -382,128 +370,6 @@ const FEED_SEED: FeedSeedEntry[] = [
   },
 ];
 
-const CATALOG: CatalogEntry[] = [
-  {
-    displayName: 'Diamond Bezel Tourbillon',
-    category: 'Timepieces',
-    price: 38200,
-    currency: 'USD',
-    heroImageUrl:
-      'https://images.unsplash.com/photo-1547996160-81dfa63595aa?auto=format&fit=crop&w=1400&q=80',
-    supplierName: 'Lumiere Horology',
-    supplierUrl: 'https://aqquire.example/suppliers/lumiere-horology',
-    uniqueFlag: true,
-    brand: 'Lumiere',
-  },
-  {
-    displayName: 'Heritage Trunk Clutch',
-    category: 'Handbags',
-    price: 7900,
-    currency: 'USD',
-    heroImageUrl:
-      'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=1400&q=80',
-    supplierName: 'Maison Cavelle',
-    supplierUrl: 'https://aqquire.example/suppliers/maison-cavelle',
-    uniqueFlag: false,
-    brand: 'Cavelle',
-  },
-  {
-    displayName: 'Milan Runway Heel',
-    category: 'Footwear',
-    price: 2800,
-    currency: 'USD',
-    heroImageUrl:
-      'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?auto=format&fit=crop&w=1400&q=80',
-    supplierName: 'Apex Atelier',
-    supplierUrl: 'https://aqquire.example/suppliers/apex-atelier',
-    uniqueFlag: false,
-    brand: 'Apex',
-  },
-  {
-    displayName: 'Grand Piano Evenings',
-    category: 'Experiences',
-    price: 2400,
-    currency: 'USD',
-    heroImageUrl:
-      'https://images.unsplash.com/photo-1513883049090-d0b7439799bf?auto=format&fit=crop&w=1400&q=80',
-    supplierName: 'Private Passage',
-    supplierUrl: 'https://aqquire.example/suppliers/private-passage',
-    uniqueFlag: false,
-    brand: 'Private Passage',
-  },
-  {
-    displayName: 'Bespoke Carbon Weekender',
-    category: 'Travel',
-    price: 12600,
-    currency: 'USD',
-    heroImageUrl:
-      'https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&w=1400&q=80',
-    supplierName: 'Altitude Reserve',
-    supplierUrl: 'https://aqquire.example/suppliers/altitude-reserve',
-    uniqueFlag: false,
-    brand: 'Altitude',
-  },
-  {
-    displayName: 'Sculpted Gold Cuff',
-    category: 'Jewelry',
-    price: 5400,
-    currency: 'USD',
-    heroImageUrl:
-      'https://images.unsplash.com/photo-1611652022419-a9419f74343d?auto=format&fit=crop&w=1400&q=80',
-    supplierName: 'Aurum House',
-    supplierUrl: 'https://aqquire.example/suppliers/aurum-house',
-    uniqueFlag: true,
-    brand: 'Aurum',
-  },
-  {
-    displayName: 'Gallery Director Edition',
-    category: 'Art',
-    price: 16400,
-    currency: 'USD',
-    heroImageUrl:
-      'https://images.unsplash.com/photo-1577083552431-6e5fd01988f1?auto=format&fit=crop&w=1400&q=80',
-    supplierName: 'Galerie Obsidian',
-    supplierUrl: 'https://aqquire.example/suppliers/galerie-obsidian',
-    uniqueFlag: true,
-    brand: 'Obsidian',
-  },
-  {
-    displayName: 'Autonomous Executive Display',
-    category: 'Automobiles',
-    price: 148000,
-    currency: 'USD',
-    heroImageUrl:
-      'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1400&q=80',
-    supplierName: 'Sovereign Motors',
-    supplierUrl: 'https://aqquire.example/suppliers/sovereign-motors',
-    uniqueFlag: false,
-    brand: 'Sovereign',
-  },
-  {
-    displayName: 'Architectural Lounge Chair',
-    category: 'Home',
-    price: 3200,
-    currency: 'USD',
-    heroImageUrl:
-      'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1400&q=80',
-    supplierName: 'Studio Lumen',
-    supplierUrl: 'https://aqquire.example/suppliers/studio-lumen',
-    uniqueFlag: false,
-    brand: 'Lumen',
-  },
-  {
-    displayName: 'Titanium Glass Flagship',
-    category: 'Tech',
-    price: 1900,
-    currency: 'USD',
-    heroImageUrl:
-      'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?auto=format&fit=crop&w=1400&q=80',
-    supplierName: 'Onyx Systems',
-    supplierUrl: 'https://aqquire.example/suppliers/onyx-systems',
-    uniqueFlag: false,
-    brand: 'Onyx',
-  },
-];
 
 function freshDatabase(): Database {
   return {
@@ -1375,50 +1241,6 @@ export interface CaptureResult {
   debugPriceBreakdown?: PriceBreakdown;
 }
 
-function hashString(value: string) {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-function analyzeCaptureLocally(imageDataUrl: string): CaptureResult {
-  if (!imageDataUrl.startsWith('data:image/')) {
-    throw new Error('Invalid image payload');
-  }
-  if (imageDataUrl.length > 8_000_000) {
-    throw new Error('Image payload is too large for demo mode');
-  }
-
-  const seed = hashString(imageDataUrl.slice(0, 8192));
-  const winner = CATALOG[seed % CATALOG.length];
-  const confidence = Number((0.45 + ((seed % 38) + 8) / 100).toFixed(3));
-
-  return {
-    displayName: winner.displayName,
-    heroImageUrl: winner.heroImageUrl,
-    category: winner.category,
-    priceEstimate: winner.price,
-    currency: winner.currency,
-    supplierName: winner.supplierName,
-    supplierUrl: winner.supplierUrl,
-    uniqueFlag: winner.uniqueFlag,
-    confidence,
-    canonicalName: winner.displayName,
-    brandHints: [winner.brand],
-    keyAttributes: ['premium', 'curated'],
-    alternates: [],
-    capturedImageUrl: imageDataUrl,
-    debugPriceBreakdown: {
-      baseCost: Number((winner.price * 0.78).toFixed(2)),
-      shipping: Number((winner.price * 0.03).toFixed(2)),
-      serviceFee: Number((winner.price * 0.19).toFixed(2)),
-    },
-  };
-}
-
 interface AqquireItArgs {
   displayName: string;
   heroImageUrl: string;
@@ -1703,28 +1525,21 @@ export function useRotateFollowToken() {
 
 export function useAnalyzeCapture() {
   return useCallback(async (args: { imageDataUrl: string }) => {
-    try {
-      if (import.meta.env.VITE_OPENAI_API_KEY) {
-        const result = await analyzeWithOpenAi(args.imageDataUrl);
-        return {
-          ok: true,
-          result: {
-            ...result,
-            debugPriceBreakdown: {
-              baseCost: Number((result.priceEstimate * 0.78).toFixed(2)),
-              shipping: Number((result.priceEstimate * 0.03).toFixed(2)),
-              serviceFee: Number((result.priceEstimate * 0.19).toFixed(2)),
-            },
-          },
-        };
-      }
-    } catch {
-      // Fall back to deterministic local matching when OpenAI lookup fails.
+    if (!import.meta.env.VITE_OPENAI_API_KEY) {
+      throw new Error('VITE_OPENAI_API_KEY is required for AQQUIRE capture lookup');
     }
 
+    const result = await analyzeWithOpenAi(args.imageDataUrl);
     return {
       ok: true,
-      result: analyzeCaptureLocally(args.imageDataUrl),
+      result: {
+        ...result,
+        debugPriceBreakdown: {
+          baseCost: Number((result.priceEstimate * 0.78).toFixed(2)),
+          shipping: Number((result.priceEstimate * 0.03).toFixed(2)),
+          serviceFee: Number((result.priceEstimate * 0.19).toFixed(2)),
+        },
+      },
     };
   }, []);
 }

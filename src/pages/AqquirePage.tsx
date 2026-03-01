@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAnalyzeCapture, useAqquireIt, useViewerContext } from '@/lib/localBackend';
@@ -37,6 +37,8 @@ interface CaptureResult {
     serviceFee: number;
   };
 }
+
+const AQQUIRE_CAPTURE_EVENT = 'aqquire:capture';
 
 function fileToDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -113,7 +115,7 @@ export function AqquirePage() {
     };
   }, []);
 
-  const commitCapturedImage = async (imageDataUrl: string) => {
+  const commitCapturedImage = useCallback(async (imageDataUrl: string) => {
     if (captureLockRef.current) return;
 
     captureLockRef.current = true;
@@ -143,15 +145,16 @@ export function AqquirePage() {
       });
 
       void navigate('/vault');
-    } catch {
-      setErrorMessage('Capture failed. Try again.');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Capture failed. Try again.';
+      setErrorMessage(message);
     } finally {
       setIsCapturing(false);
       captureLockRef.current = false;
     }
-  };
+  }, [analyzeCapture, aqquireIt, navigate]);
 
-  const snapLiveFrame = async () => {
+  const snapLiveFrame = useCallback(async () => {
     if (!videoRef.current || videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
       setErrorMessage('Camera is still loading. Try again.');
       return;
@@ -175,7 +178,18 @@ export function AqquirePage() {
     const imageDataUrl = canvas.toDataURL('image/jpeg', 0.92);
 
     await commitCapturedImage(imageDataUrl);
-  };
+  }, [commitCapturedImage]);
+
+  useEffect(() => {
+    const handleCapture = () => {
+      void snapLiveFrame();
+    };
+
+    window.addEventListener(AQQUIRE_CAPTURE_EVENT, handleCapture);
+    return () => {
+      window.removeEventListener(AQQUIRE_CAPTURE_EVENT, handleCapture);
+    };
+  }, [snapLiveFrame]);
 
   const onUploadSelected = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -207,22 +221,19 @@ export function AqquirePage() {
         ref={videoRef}
         muted
         playsInline
-        onClick={() => {
-          void snapLiveFrame();
-        }}
-        className="h-full w-full cursor-pointer object-cover"
+        className="h-full w-full object-cover"
       />
 
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(248,220,152,0.14),transparent_42%),radial-gradient(circle_at_80%_70%,rgba(220,165,92,0.14),transparent_46%)]" />
 
       <div className="absolute inset-x-0 top-0 z-20 border-b border-white/10 bg-black/35 px-4 py-3 backdrop-blur">
         <p className="font-display text-2xl tracking-[0.2em] text-champagne">AQQUIRE</p>
-        <p className="text-[11px] uppercase tracking-[0.2em] text-pearl/70">Live camera. Tap screen to capture.</p>
+        <p className="text-[11px] uppercase tracking-[0.2em] text-pearl/70">Live camera. Tap AQQUIRE circle to capture.</p>
       </div>
 
       <div className="absolute inset-x-0 bottom-0 z-20 space-y-3 border-t border-white/10 bg-black/40 p-4 backdrop-blur">
         <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.16em] text-pearl/70">
-          <span>{cameraReady ? 'Camera ready' : 'Initializing camera'}</span>
+          {!cameraReady ? <span>Initializing camera</span> : <span />}
           <button
             type="button"
             onClick={() => uploadRef.current?.click()}
@@ -234,7 +245,7 @@ export function AqquirePage() {
 
         {debugMode ? (
           <p className="text-[11px] uppercase tracking-[0.14em] text-champagne/80">
-            Debug enabled: AI target + online lookup active when VITE_OPENAI_API_KEY is set.
+            Debug enabled: capture uses OpenAI visual target + web lookup.
           </p>
         ) : null}
 

@@ -34,7 +34,7 @@ Optional env vars:
 - `VITE_DEMO_MODE=1` (bypass WorkOS auth and run with a local demo user)
 - `VITE_ROUTER_MODE=hash` (recommended for static hosting)
 - `VITE_BASE_PATH=/repo-name/` (for project-site deploys)
-- `VITE_OPENAI_API_KEY` (enables live AQQUIRE image target identification + online lookup)
+- `VITE_OPENAI_API_KEY` (required for AQQUIRE image target identification + online lookup)
 - `VITE_OPENAI_VISION_MODEL` (default `gpt-5.2`)
 - `VITE_OPENAI_SEARCH_MODEL` (default `gpt-5.2`)
 
@@ -72,4 +72,4 @@ To enable it:
 
 - App state persists in `localStorage` under `aqquire.local.db.v1`.
 - Initial feed/policy/trophy seed runs automatically after sign-in.
-- AQQUIRE capture analysis uses deterministic local matching (no backend required).
+- AQQUIRE capture analysis uses OpenAI vision + web search lookup.

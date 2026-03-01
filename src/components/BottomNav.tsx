@@ -1,13 +1,28 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
+const AQQUIRE_CAPTURE_EVENT = 'aqquire:capture';
+
 export function BottomNav() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isAqquire = location.pathname === '/aqquire';
+
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-champagne/20 bg-obsidian/95 px-4 pb-[max(env(safe-area-inset-bottom),0.8rem)] pt-3 backdrop-blur-lg">
       <div className="mx-auto grid w-full max-w-3xl grid-cols-3 items-center gap-4">
         <NavButton to="/feed" label="Feed" />
-        <ShutterButton />
+        <ShutterButton
+          isAqquire={isAqquire}
+          onPress={() => {
+            if (isAqquire) {
+              window.dispatchEvent(new CustomEvent(AQQUIRE_CAPTURE_EVENT));
+              return;
+            }
+            void navigate('/aqquire');
+          }}
+        />
         <NavButton to="/vault" label="Vault" icon={<VaultIcon />} />
       </div>
     </nav>
@@ -33,21 +48,19 @@ function NavButton({ to, label, icon }: { to: string; label: string; icon?: Reac
   );
 }
 
-function ShutterButton() {
+function ShutterButton({ isAqquire, onPress }: { isAqquire: boolean; onPress: () => void }) {
   return (
-    <NavLink to="/aqquire" className="flex items-center justify-center">
-      {({ isActive }) => (
-        <span
-          className={cn(
-            'flex h-16 w-16 items-center justify-center rounded-full border text-[11px] font-semibold tracking-[0.18em] uppercase transition-transform duration-200',
-            'border-champagne bg-gradient-to-b from-[#f5e7c2] via-[#d8b66f] to-[#a67a35] text-obsidian shadow-[0_0_0_2px_rgba(255,231,186,0.25),0_10px_35px_rgba(214,170,92,0.45)]',
-            isActive ? 'scale-105' : 'hover:scale-[1.02]',
-          )}
-        >
-          AQQUIRE
-        </span>
-      )}
-    </NavLink>
+    <button type="button" onClick={onPress} className="flex items-center justify-center">
+      <span
+        className={cn(
+          'flex h-16 w-16 items-center justify-center rounded-full border text-[11px] font-semibold tracking-[0.18em] uppercase transition-transform duration-200',
+          'border-champagne bg-gradient-to-b from-[#f5e7c2] via-[#d8b66f] to-[#a67a35] text-obsidian shadow-[0_0_0_2px_rgba(255,231,186,0.25),0_10px_35px_rgba(214,170,92,0.45)]',
+          isAqquire ? 'scale-105' : 'hover:scale-[1.02]',
+        )}
+      >
+        AQQUIRE
+      </span>
+    </button>
   );
 }
 

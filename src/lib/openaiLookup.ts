@@ -223,15 +223,52 @@ function resolvedPrice(online: OnlineLookup): number {
   return 2500;
 }
 
-function clampDataUrlSize(imageDataUrl: string): string {
-  // Keep payload sizes bounded when users capture very high-res frames.
-  const maxChars = 6_500_000;
-  if (imageDataUrl.length <= maxChars) return imageDataUrl;
-  return imageDataUrl.slice(0, maxChars);
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Unable to decode image payload'));
+    image.src = dataUrl;
+  });
+}
+
+async function optimizeDataUrlForVision(imageDataUrl: string): Promise<string> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return imageDataUrl;
+  }
+
+  if (imageDataUrl.length <= 4_800_000) {
+    return imageDataUrl;
+  }
+
+  try {
+    const image = await loadImage(imageDataUrl);
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    if (width === 0 || height === 0) {
+      return imageDataUrl;
+    }
+
+    const maxDimension = 1600;
+    const scale = Math.min(1, maxDimension / Math.max(width, height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.floor(width * scale));
+    canvas.height = Math.max(1, Math.floor(height * scale));
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return imageDataUrl;
+    }
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.84);
+  } catch {
+    return imageDataUrl;
+  }
 }
 
 export async function analyzeWithOpenAi(imageDataUrl: string): Promise<OpenAiLookupResult> {
-  const normalizedDataUrl = clampDataUrlSize(imageDataUrl);
+  const normalizedDataUrl = await optimizeDataUrlForVision(imageDataUrl);
 
   const target = await detectPrimaryTarget(normalizedDataUrl);
   const online = await lookupOnline(target);
